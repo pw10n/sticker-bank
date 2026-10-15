@@ -1,0 +1,1351 @@
+# Sticker Bank: Technical Design Document (TDD)
+
+| | |
+|---|---|
+| **Product** | Sticker Bank: a sticker / reward chart for young children |
+| **Document** | Technical Design Document |
+| **Version** | 0.2 |
+| **Status** | Draft |
+| **Date** | 2026-10-15 |
+| **Implements** | [Functional Design Document v1.0](FDD.md) |
+
+> **Scope note:** This document covers **how** Sticker Bank is built: architecture, data storage, APIs, frontend, security, and deployment. **What** the app does is defined in the FDD. Requirement IDs (FR-x.y, BR-x, A-x, D-x) refer to it. Where the FDD is silent and a technical choice fills the gap, the choice is listed in §16.
+
+### Revision History
+
+| Version | Date | Summary |
+|---|---|---|
+| 0.1 | 2026-10-15 | First draft from FDD v1.0. Spring Boot 4 (Kotlin), MySQL 8.4, React PWA, one container on Kubernetes, LAN/VPN-only access, online-only writes, Admin PIN reset by SQL. |
+| 0.2 | 2026-10-15 | Local development with no database server to run: Testcontainers dev mode for full-stack work, an MSW mock-API mode for UI work (TD-16, §12.5). SQLite and H2 considered and rejected. |
+
+---
+
+## 1. Summary
+
+Sticker Bank ships as **one container image**. A Kotlin Spring Boot service serves both the JSON API (`/api/...`) and the React PWA's static files from the same origin, and keeps all data in a MySQL database. It runs as a Deployment on the family's Kubernetes cluster and is reachable over HTTPS only on the home network or over a VPN.
+
+The decisions that shape the rest of the design:
+
+1. **The server owns "today".** The family's time zone is stored in the database, and the server decides which calendar day it is (FR-4.4). Every device sees the same day, and a device with a wrong clock can't complete tomorrow's tasks (BR-5).
+2. **Routines are versioned by date.** Editing a routine writes a dated *revision* instead of changing it in place. Any past day can be rebuilt exactly as it was (FR-4.3). The "once today's sticker is earned, changes start tomorrow" rule (BR-2) becomes a single choice of date.
+3. **The database protects the currency.** Stickers are currency (BR-12), so earning and spending run in transactions that lock the child's row, backed by unique keys. Two devices tapping at the same moment can't earn twice (BR-7) or spend the same sticker twice (BR-10).
+4. **The PWA is built for toddlers.** Big touch targets, instant (optimistic) taps, celebrations, an installable app shell, and a friendly "waiting for Wi-Fi" state when the server can't be reached.
+
+## 2. Technical Decisions
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| TD-1 | Backend | Kotlin 2.2+ on Spring Boot 4, Java 25 LTS | Mature ecosystem. Health probes, migrations, validation, and testing come built in. |
+| TD-2 | Data access | Spring Data JDBC for simple aggregates. `JdbcClient` for chart/history queries and row locks. No JPA. | The core logic is set-based SQL with explicit locks. JPA's proxies and lazy loading fight Kotlin and hide the SQL. |
+| TD-3 | Schema | Flyway migrations, forward-only, expand/contract | Repeatable, and safe during rolling updates. |
+| TD-4 | Frontend | React 19 + TypeScript, Vite, vite-plugin-pwa (Workbox), TanStack Query, React Router | Standard, well-supported PWA tooling. |
+| TD-5 | Packaging | One image. Spring Boot serves the built PWA. | Same origin: no CORS, one thing to deploy, and the UI and API versions always match. |
+| TD-6 | Network | LAN / VPN only, HTTPS required | Child Mode has no login (A-2). Service workers only run over HTTPS. |
+| TD-7 | Offline | Writes need the server. The app shell, artwork, and last-loaded data are shown read-only while offline. | No sync conflicts around currency. The server generates Sticker Picks (BR-6). |
+| TD-8 | PIN reset | Direct SQL. The Admin runs `CALL reset_parent_pin('<name>')`. | The Admin's MySQL access is the authentication. The procedure makes the audit row impossible to forget (FR-8.10). |
+| TD-9 | Day boundary | Family time zone (IANA) stored server-side. The server computes today. | One shared "today" for every device (FR-4.4, BR-5). |
+| TD-10 | History | Dated routine revisions, with no nightly jobs | Past days are exact even if the server was down at midnight (FR-4.3, FR-6.5, §6.9). |
+| TD-11 | Device sync | Polling every 30 s while visible, plus refetch on focus and reconnect | Simple. No WebSockets, and no pub/sub between replicas. Feels live enough on a LAN. |
+| TD-12 | Artwork | A curated subset of Microsoft Fluent Emoji (3D style, MIT license), bundled in the image and referenced by key | Same look on every device and OS, works offline, no uploads (FR-10.3, D-6). |
+| TD-13 | Kubernetes | Kustomize base + overlay. Bring your own MySQL via a Secret, with optional in-cluster MySQL manifests. | Plain YAML that works with any GitOps tool. |
+| TD-14 | Image | Multi-arch (amd64 + arm64), non-root, read-only root filesystem | Runs on PC or Raspberry Pi nodes, hardened. |
+| TD-15 | API contract | OpenAPI generated by springdoc. TypeScript types generated from it. | The frontend and backend can't silently drift apart. |
+| TD-16 | Local development | Full stack: `./gradlew bootTestRun` starts a throwaway MySQL 8.4 with Testcontainers. UI only: `npm run dev:mock` answers the API from an in-browser mock (MSW). No SQLite or H2 profile. | Nothing to install or keep running except a container runtime, and dev uses the same database engine and SQL as production. SQLite and H2 were considered and rejected (§12.5). |
+
+## 3. Architecture
+
+### 3.1 System Context
+
+```mermaid
+flowchart LR
+    subgraph Devices["Family devices on home Wi-Fi or VPN"]
+        T["Child's tablet<br/>installed PWA"]
+        P["Parent's phone<br/>installed PWA"]
+    end
+    subgraph K8s["Kubernetes, namespace sticker-bank"]
+        I["Ingress<br/>TLS, LAN/VPN only"]
+        S["Service<br/>port 80 to 8080"]
+        APP["Pod: Spring Boot 4 + Kotlin<br/>8080: API and PWA files<br/>8081: health probes"]
+    end
+    DB[("MySQL 8.4<br/>database sticker_bank")]
+    ADMIN["Admin<br/>mysql client"]
+    T -->|HTTPS| I
+    P -->|HTTPS| I
+    I --> S --> APP
+    APP -->|JDBC| DB
+    ADMIN -->|CALL reset_parent_pin| DB
+```
+
+### 3.2 Components
+
+| Component | Responsibility |
+|---|---|
+| **PWA** (React) | Child Mode and Parent Mode UI, celebrations and sounds, offline shell, day rollover, Parent Mode idle timeout. Holds no authoritative state. |
+| **API** (Spring Boot) | All business rules (§7), the PIN and parent sessions, and serving the PWA's files with correct cache headers. Stateless, so any number of replicas can run. |
+| **MySQL** | Single source of truth. Holds the stored procedure for the Admin PIN reset. |
+| **Kubernetes** | Ingress with TLS (LAN/VPN only), Deployment, Service, ConfigMap, Secret, NetworkPolicy. |
+
+### 3.3 Request Routing Inside the App
+
+| Path | Served by | `Cache-Control` |
+|---|---|---|
+| `/api/**` | REST controllers | `no-store` |
+| `/assets/**` (hashed JS, CSS, fonts) | Static files | `public, max-age=31536000, immutable` |
+| `/artwork/**`, `/sounds/**` | Static files | `public, max-age=86400` (the service worker precache keeps them current) |
+| `/index.html`, `/sw.js`, `/manifest.webmanifest` | Static files | `no-cache` |
+| Any other `GET` without a file extension | `index.html` (SPA fallback) | `no-cache` |
+| `:8081/actuator/**` | Actuator, not routed by the Service | n/a |
+
+## 4. Technology Stack
+
+| Layer | Choice | Notes |
+|---|---|---|
+| **Backend** | | |
+| Language / runtime | Kotlin 2.2+, Java 25 LTS (Eclipse Temurin) | |
+| Framework | Spring Boot 4.0.x: `spring-boot-starter-webmvc`, `-data-jdbc`, `-validation`, `-actuator`, `-flyway` + `flyway-mysql` | Spring MVC (blocking). JDBC blocks anyway, and the load is tiny. Boot 4 split auto-configuration into modules, so Flyway needs its own starter. |
+| Database driver | MySQL Connector/J | URL params: `connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true` |
+| JSON | Jackson with the Kotlin module, ISO-8601 dates | |
+| PIN hashing | `spring-security-crypto` BCrypt (cost 12) | The crypto module only, with no Spring Security filter chain (§11.3). |
+| API docs | springdoc-openapi (the Boot 4 line) | Spec served at `/api/openapi.json` |
+| Build | Gradle 9, Kotlin DSL, version catalog, ktlint + detekt | |
+| Tests | JUnit Jupiter, MockK, Testcontainers (MySQL), AssertJ | |
+| **Frontend** | | |
+| Language | TypeScript (strict) | |
+| UI and routing | React 19, React Router 7 | |
+| Build | Vite, vite-plugin-pwa (Workbox) | |
+| Server state | TanStack Query 5, with child-mode queries persisted to IndexedDB | Read-only display while offline (§9.6) |
+| API client | openapi-typescript + openapi-fetch | Types generated from the backend spec |
+| Styling | Tailwind CSS 4, with design tokens per child theme color | |
+| Motion | Motion (formerly Framer Motion), canvas-confetti | Celebrations and the "sticking" animation |
+| Drag and drop | dnd-kit (touch and keyboard sensors) | FR-2.4, FR-3.4 |
+| Forms | React Hook Form + Zod | Parent screens |
+| Font | Andika (SIL Open Font License), self-hosted | Designed for beginning readers |
+| Tests | Vitest, React Testing Library, MSW, Playwright | |
+| **Data and platform** | | |
+| Database | MySQL 8.4 LTS, InnoDB, `utf8mb4` | Names and prize text can contain emoji |
+| Container | Multi-stage Dockerfile, runtime `eclipse-temurin:25-jre` | |
+| Orchestration | Kubernetes, Kustomize | |
+| Build-only tooling | Node 24 LTS | Not in the runtime image |
+| Local development | A container runtime: OrbStack, Colima, or Docker Desktop | Runs the dev database through Testcontainers (§12.5) and builds the image locally |
+
+> Exact versions are pinned in `gradle/libs.versions.toml` and `package-lock.json` at project start. The major versions above are the baseline.
+
+## 5. Repository Layout
+
+```
+sticker-bank/
+├── docs/                    FDD.md, TDD.md, runbooks/
+├── artwork/                 catalog.json, source images, conversion script
+├── backend/                 Spring Boot service (Gradle, Kotlin DSL)
+│   ├── src/main/
+│   │   ├── kotlin/com/stickerbank/
+│   │   │   ├── common/      errors (ProblemDetail), FamilyClock, ChildLock, web and header config
+│   │   │   ├── family/      settings, PIN, parent sessions, ParentAuthInterceptor
+│   │   │   ├── child/       child profiles
+│   │   │   ├── routine/     routines, revisions, tasks, schedules, skips, copy
+│   │   │   ├── chart/       Daily Chart assembly, task completion, history
+│   │   │   ├── sticker/     library, categories, artwork catalog, earning, Sticker Pick, Sticker Book
+│   │   │   └── prize/       Prize Requests
+│   │   └── resources/
+│   │       ├── application.yaml
+│   │       └── db/migration/  V1__schema.sql, V2__seed_sticker_library.sql, V3__reset_pin_procedure.sql
+│   └── src/test/kotlin/com/stickerbank/
+│       ├── dev/             TestStickerBankApplication, MySqlContainerConfig, DemoDataSeeder (§12.5)
+│       └── …                unit and integration tests
+├── frontend/                Vite + React + TypeScript
+│   ├── public/artwork/      generated 256 px WebP files (committed)
+│   └── src/
+│       ├── api/             openapi.json snapshot, generated types, client, query hooks
+│       ├── app/             providers: mode, device settings, idle timer, day rollover, update prompt, offline state
+│       ├── child/           Daily Chart, task tiles, celebration, Sticker Pick, Sticker Book, Get a Prize, PIN pad
+│       ├── mocks/           MSW handlers, in-memory fake API, named scenarios (dev:mock and tests)
+│       ├── parent/          children, routine editor, library, prize requests, history, settings
+│       ├── ui/              shared components (BigTile, Sheet, ConfirmDialog, Artwork)
+│       └── sound/
+├── deploy/k8s/              base/, overlays/home/, optional/mysql/
+├── Dockerfile
+└── compose.yaml             app image + MySQL 8.4 for end-to-end tests
+```
+
+Backend packages are organized by feature. Each one has a controller, a service (transaction boundary and rules), repositories, and DTOs.
+
+## 6. Data Model
+
+### 6.1 Naming
+
+| FDD term | Code / table |
+|---|---|
+| Child | `child` |
+| Routine | `routine` (identity, display order) + `routine_revision` (dated definition) |
+| Task | `task` (identity) + `revision_task` (label, icon, and position within one revision) |
+| Sticker (a design in the Sticker Library) | `sticker_design` |
+| Sticker in a Sticker Book | `sticker` |
+| Sticker Pick | The `sticker_pick_choice` rows of an `UNCLAIMED` sticker |
+| Category / pack | `sticker_category` |
+| Prize Request | `prize_request` + `prize_request_item` |
+| Parent PIN and family settings | `family_settings` (a single row) |
+
+### 6.2 Conventions
+
+- **One deployment = one family (A-1).** There is no tenant column. Family-wide settings live in a single row.
+- IDs are `BIGINT AUTO_INCREMENT`. Timestamps are `DATETIME(3)` in UTC: the JVM and the JDBC session are both forced to UTC. Calendar days are `DATE` values in the family time zone (`chart_date`).
+- Character set `utf8mb4`, collation `utf8mb4_0900_ai_ci`.
+- Artwork is referenced by `*_key` strings, validated against the bundled catalog (§9.7).
+- Rows a child owns cascade when the child is deleted (FR-1.3, BR-14). Sticker designs are protected by `RESTRICT` (BR-15).
+- Weekdays are stored as a 7-bit mask: bit 0 = Monday … bit 6 = Sunday.
+
+### 6.3 Entity Relationships
+
+```mermaid
+erDiagram
+    child ||--o{ routine : has
+    routine ||--|{ routine_revision : "defined by"
+    routine ||--o{ task : owns
+    routine_revision ||--o{ revision_task : lists
+    task ||--o{ revision_task : "appears in"
+    task ||--o{ task_completion : "done on a date"
+    routine ||--o{ routine_skip : "skipped on"
+    child ||--o{ sticker : earns
+    routine |o--o{ sticker : "earned by"
+    sticker_design |o--o{ sticker : "looks like"
+    sticker ||--o{ sticker_pick_choice : "offers while unclaimed"
+    sticker_design ||--o{ sticker_pick_choice : "offered as"
+    sticker_category |o--o{ sticker_design : groups
+    child ||--o{ prize_request : makes
+    prize_request ||--|{ prize_request_item : contains
+    sticker ||--o{ prize_request_item : "spent in"
+```
+
+`family_settings`, `parent_session`, and `pin_reset_log` stand alone.
+
+### 6.4 Routine Revisions (FR-4.3, BR-2, BR-3)
+
+A routine's definition is stored as **revisions**: name, icon, color, schedule, paused, deleted, and its ordered task list. Each revision has an `effective_from` date. **The definition for day D is the revision with the latest `effective_from ≤ D`.**
+
+**Which date an edit applies from:**
+
+```
+E = today + 1   if the routine has already earned its sticker today
+                (a sticker row exists for routine × today, claimed or not)
+E = today       otherwise
+```
+
+An edit upserts the revision with `effective_from = E`, so repeated edits on the same day overwrite a single row. Every kind of edit follows this rule: renaming, rescheduling (FR-4.1), pausing (FR-2.6), changing tasks (FR-3.x), and deleting (FR-2.3, stored as a revision with `deleted = true`).
+
+What follows from this:
+
+- Past days never change, because their revisions are never touched (FR-4.3).
+- A routine that earned its sticker stays exactly as it was for the rest of the day (BR-2, FR-7.4).
+- Tasks keep their identity (`task.id`) across revisions, so a completion survives a rename. A removed task's completion stays in the table but no longer counts. If the task is put back the same day, it counts again.
+- If an edit to today's revision leaves every remaining task done, the routine earns its sticker right away (FR-7.1, see I-3).
+- A routine appears on day D only if its revision for D exists, isn't deleted or paused, includes D's weekday, and has at least one task (FR-3.5). A skip row for D shows it as Skipped (FR-4.5).
+- Display order (`routine.position`) isn't versioned. Past days are shown in the current order (I-6).
+
+The query for one child's plan on date D:
+
+```sql
+WITH ranked AS (
+  SELECT rr.*,
+         ROW_NUMBER() OVER (PARTITION BY rr.routine_id ORDER BY rr.effective_from DESC) AS rn
+  FROM routine_revision rr
+  JOIN routine r ON r.id = rr.routine_id
+  WHERE r.child_id = :childId
+    AND rr.effective_from <= :date
+)
+SELECT * FROM ranked
+WHERE rn = 1
+  AND NOT deleted
+  AND NOT paused
+  AND (days_mask & (1 << :weekdayIndex)) <> 0;
+```
+
+One more query then loads the `revision_task` rows for the returned revisions. History over a date range loads all of the child's revisions once and evaluates each day in memory.
+
+### 6.5 Sticker Status in Data
+
+| `sticker.status` | Meaning | `design_id` | `prize_request_id` |
+|---|---|---|---|
+| `UNCLAIMED` | Earned, but the Sticker Pick isn't done yet. The choices are in `sticker_pick_choice`. Not counted in the Sticker Book. | `NULL` | `NULL` |
+| `AVAILABLE` | In the Sticker Book and can be spent | set | `NULL` |
+| `PENDING` | Part of the child's open Prize Request | set | the pending request |
+| `USED` | Spent on a prize | set | the completed request |
+
+The transitions follow FDD §5.3, with `UNCLAIMED` added as the step before it. `prize_request_item` permanently records which stickers were in each request, so cancelled and reversed requests still show their stickers in history (FR-11.10).
+
+**Fallback sticker (FR-7.11):** Flyway seeds one `sticker_design` with `is_fallback = TRUE` ("Gold Star"). It's never offered in a pick, can't be edited or deleted, and is hidden from the library page (I-13). When the pick pool is empty, the earned sticker is created directly as `AVAILABLE` with this design.
+
+### 6.6 Schema (`V1__schema.sql`)
+
+```sql
+CREATE TABLE family_settings (
+  id                      TINYINT      NOT NULL PRIMARY KEY,
+  pin_hash                VARCHAR(100) NULL,             -- NULL = no PIN yet, or reset by Admin
+  pin_set_at              DATETIME(3)  NULL,
+  failed_pin_attempts     INT          NOT NULL DEFAULT 0,
+  lockout_level           INT          NOT NULL DEFAULT 0,
+  pin_locked_until        DATETIME(3)  NULL,
+  time_zone               VARCHAR(64)  NOT NULL DEFAULT 'UTC',
+  parent_idle_timeout_sec INT          NOT NULL DEFAULT 300,
+  updated_at              DATETIME(3)  NOT NULL,
+  CONSTRAINT ck_family_settings_singleton CHECK (id = 1)
+);
+INSERT INTO family_settings (id, updated_at) VALUES (1, UTC_TIMESTAMP(3));
+
+CREATE TABLE parent_session (
+  id           BIGINT      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  token_hash   BINARY(32)  NOT NULL,                     -- SHA-256 of the cookie value
+  created_at   DATETIME(3) NOT NULL,
+  last_seen_at DATETIME(3) NOT NULL,
+  expires_at   DATETIME(3) NOT NULL,
+  CONSTRAINT uq_parent_session_token UNIQUE (token_hash)
+);
+
+CREATE TABLE pin_reset_log (                             -- FR-8.10
+  id         BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  reset_at   DATETIME(3)  NOT NULL,
+  admin_name VARCHAR(100) NOT NULL,
+  db_user    VARCHAR(288) NOT NULL                       -- MySQL login that ran the reset
+);
+
+CREATE TABLE child (
+  id          BIGINT      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name        VARCHAR(40) NOT NULL,
+  avatar_key  VARCHAR(64) NOT NULL,
+  theme_color VARCHAR(16) NOT NULL,
+  position    INT         NOT NULL,
+  archived_at DATETIME(3) NULL,                          -- FR-1.4 (Could), unused in v1
+  created_at  DATETIME(3) NOT NULL,
+  updated_at  DATETIME(3) NOT NULL
+);
+
+CREATE TABLE routine (
+  id         BIGINT      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  child_id   BIGINT      NOT NULL,
+  position   INT         NOT NULL,                       -- FR-2.4, not versioned
+  created_at DATETIME(3) NOT NULL,
+  deleted_at DATETIME(3) NULL,                           -- hides it from the parent's list
+  CONSTRAINT fk_routine_child FOREIGN KEY (child_id) REFERENCES child (id) ON DELETE CASCADE,
+  INDEX ix_routine_child (child_id, position)
+);
+
+CREATE TABLE routine_revision (
+  id             BIGINT           NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  routine_id     BIGINT           NOT NULL,
+  effective_from DATE             NOT NULL,
+  name           VARCHAR(60)      NOT NULL,
+  icon_key       VARCHAR(64)      NOT NULL,
+  color          VARCHAR(16)      NULL,
+  days_mask      TINYINT UNSIGNED NOT NULL,              -- bit 0 = Monday … bit 6 = Sunday
+  paused         BOOLEAN          NOT NULL DEFAULT FALSE,
+  deleted        BOOLEAN          NOT NULL DEFAULT FALSE,
+  updated_at     DATETIME(3)      NOT NULL,
+  CONSTRAINT fk_revision_routine FOREIGN KEY (routine_id) REFERENCES routine (id) ON DELETE CASCADE,
+  CONSTRAINT uq_revision_effective UNIQUE (routine_id, effective_from)
+);
+
+CREATE TABLE task (
+  id         BIGINT      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  routine_id BIGINT      NOT NULL,
+  created_at DATETIME(3) NOT NULL,
+  CONSTRAINT fk_task_routine FOREIGN KEY (routine_id) REFERENCES routine (id) ON DELETE CASCADE
+);
+
+CREATE TABLE revision_task (
+  revision_id BIGINT           NOT NULL,
+  task_id     BIGINT           NOT NULL,
+  position    INT              NOT NULL,
+  label       VARCHAR(60)      NOT NULL,
+  icon_key    VARCHAR(64)      NOT NULL,
+  days_mask   TINYINT UNSIGNED NULL,                     -- FR-3.6 (Could); NULL = every scheduled day
+  PRIMARY KEY (revision_id, task_id),
+  CONSTRAINT fk_rt_revision FOREIGN KEY (revision_id) REFERENCES routine_revision (id) ON DELETE CASCADE,
+  CONSTRAINT fk_rt_task     FOREIGN KEY (task_id)     REFERENCES task (id)             ON DELETE CASCADE
+);
+
+CREATE TABLE routine_skip (                              -- FR-4.5
+  routine_id BIGINT      NOT NULL,
+  chart_date DATE        NOT NULL,
+  created_at DATETIME(3) NOT NULL,
+  PRIMARY KEY (routine_id, chart_date),
+  CONSTRAINT fk_skip_routine FOREIGN KEY (routine_id) REFERENCES routine (id) ON DELETE CASCADE
+);
+
+CREATE TABLE task_completion (                           -- BR-1
+  task_id      BIGINT                 NOT NULL,
+  chart_date   DATE                   NOT NULL,
+  routine_id   BIGINT                 NOT NULL,          -- denormalized for chart queries
+  child_id     BIGINT                 NOT NULL,          -- denormalized for history queries
+  completed_at DATETIME(3)            NOT NULL,
+  completed_by ENUM('CHILD','PARENT') NOT NULL,
+  PRIMARY KEY (task_id, chart_date),
+  INDEX ix_completion_routine_day (routine_id, chart_date),
+  INDEX ix_completion_child_day (child_id, chart_date),
+  CONSTRAINT fk_completion_task    FOREIGN KEY (task_id)    REFERENCES task (id)    ON DELETE CASCADE,
+  CONSTRAINT fk_completion_routine FOREIGN KEY (routine_id) REFERENCES routine (id) ON DELETE CASCADE,
+  CONSTRAINT fk_completion_child   FOREIGN KEY (child_id)   REFERENCES child (id)   ON DELETE CASCADE
+);
+
+CREATE TABLE sticker_category (                          -- FR-10.9
+  id       BIGINT      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name     VARCHAR(40) NOT NULL,
+  enabled  BOOLEAN     NOT NULL DEFAULT TRUE,            -- turns a whole pack on or off
+  position INT         NOT NULL,
+  CONSTRAINT uq_category_name UNIQUE (name)
+);
+
+CREATE TABLE sticker_design (
+  id          BIGINT                   NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name        VARCHAR(40)              NOT NULL,
+  artwork_key VARCHAR(64)              NOT NULL,
+  category_id BIGINT                   NULL,
+  status      ENUM('ACTIVE','RETIRED') NOT NULL DEFAULT 'ACTIVE',
+  is_fallback BOOLEAN                  NOT NULL DEFAULT FALSE,   -- FR-7.11
+  created_at  DATETIME(3)              NOT NULL,
+  updated_at  DATETIME(3)              NOT NULL,
+  CONSTRAINT fk_design_category FOREIGN KEY (category_id) REFERENCES sticker_category (id) ON DELETE SET NULL,
+  INDEX ix_design_pool (status, is_fallback, category_id)
+);
+
+CREATE TABLE prize_request (
+  id           BIGINT                                             NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  child_id     BIGINT                                             NOT NULL,
+  status       ENUM('PENDING','COMPLETED','CANCELLED','REVERSED') NOT NULL,
+  created_by   ENUM('CHILD','PARENT')                             NOT NULL,
+  prize_text   VARCHAR(200)                                       NULL,   -- required to complete
+  note         VARCHAR(500)                                       NULL,
+  created_at   DATETIME(3)                                        NOT NULL,
+  completed_at DATETIME(3)                                        NULL,
+  cancelled_at DATETIME(3)                                        NULL,
+  cancelled_by ENUM('CHILD','PARENT')                             NULL,
+  reversed_at  DATETIME(3)                                        NULL,
+  updated_at   DATETIME(3)                                        NOT NULL,
+  CONSTRAINT fk_request_child FOREIGN KEY (child_id) REFERENCES child (id) ON DELETE CASCADE,
+  INDEX ix_request_child_status (child_id, status, created_at),
+  INDEX ix_request_status (status, created_at)
+);
+
+CREATE TABLE sticker (                                   -- one earned sticker in a Sticker Book
+  id               BIGINT                                         NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  child_id         BIGINT                                         NOT NULL,
+  source           ENUM('ROUTINE','BONUS')                        NOT NULL,
+  routine_id       BIGINT                                         NULL,   -- NULL for bonus stickers (FR-7.12)
+  chart_date       DATE                                           NOT NULL,
+  routine_name     VARCHAR(60)                                    NULL,   -- snapshot at earn time (I-9)
+  routine_icon_key VARCHAR(64)                                    NULL,
+  design_id        BIGINT                                         NULL,   -- NULL while UNCLAIMED
+  status           ENUM('UNCLAIMED','AVAILABLE','PENDING','USED') NOT NULL,
+  prize_request_id BIGINT                                         NULL,   -- set while PENDING or USED
+  earned_at        DATETIME(3)                                    NOT NULL,
+  claimed_at       DATETIME(3)                                    NULL,
+  CONSTRAINT uq_sticker_routine_day UNIQUE (routine_id, chart_date),                 -- BR-7, FR-7.3
+  CONSTRAINT fk_sticker_child   FOREIGN KEY (child_id)   REFERENCES child (id)   ON DELETE CASCADE,
+  -- Routines are only hard-deleted together with their child, so this cascade never
+  -- removes stickers from a child who still exists (BR-3).
+  CONSTRAINT fk_sticker_routine FOREIGN KEY (routine_id) REFERENCES routine (id) ON DELETE CASCADE,
+  CONSTRAINT fk_sticker_design  FOREIGN KEY (design_id)  REFERENCES sticker_design (id) ON DELETE RESTRICT, -- BR-15
+  CONSTRAINT fk_sticker_request FOREIGN KEY (prize_request_id) REFERENCES prize_request (id) ON DELETE SET NULL,
+  INDEX ix_sticker_book (child_id, status, chart_date)
+);
+
+CREATE TABLE sticker_pick_choice (                       -- BR-6: saved once, never regenerated
+  sticker_id BIGINT  NOT NULL,
+  slot       TINYINT NOT NULL,                           -- 1–3, display order
+  design_id  BIGINT  NOT NULL,
+  PRIMARY KEY (sticker_id, slot),
+  CONSTRAINT uq_choice_design  UNIQUE (sticker_id, design_id),                       -- 3 different stickers (FR-7.7)
+  CONSTRAINT fk_choice_sticker FOREIGN KEY (sticker_id) REFERENCES sticker (id)        ON DELETE CASCADE,
+  CONSTRAINT fk_choice_design  FOREIGN KEY (design_id)  REFERENCES sticker_design (id) ON DELETE RESTRICT  -- I-4
+);
+
+CREATE TABLE prize_request_item (
+  prize_request_id BIGINT NOT NULL,
+  sticker_id       BIGINT NOT NULL,
+  PRIMARY KEY (prize_request_id, sticker_id),
+  CONSTRAINT fk_item_request FOREIGN KEY (prize_request_id) REFERENCES prize_request (id) ON DELETE CASCADE,
+  CONSTRAINT fk_item_sticker FOREIGN KEY (sticker_id)       REFERENCES sticker (id)       ON DELETE CASCADE
+);
+```
+
+Deleting a child relies on these cascades. An integration test proves the delete removes every row the child owns (§13).
+
+## 7. Core Flows and Business Logic
+
+### 7.1 Concurrency Model
+
+- **Per-child lock.** Every write that touches a child's chart, stickers, or Prize Requests runs in one transaction that locks the child row first: `SELECT id FROM child WHERE id = ? FOR UPDATE` (via `ChildLock.withChildLock(childId) { … }`). One child's writes run one at a time, and different children never block each other. A family makes a handful of writes a minute, so contention is effectively zero.
+- **Isolation.** The connection pool uses `READ COMMITTED`, so reads made after the lock is taken see everything committed before it.
+- **Unique keys as a backstop:** `sticker (routine_id, chart_date)` for BR-7, `task_completion (task_id, chart_date)` for BR-1, and `sticker_pick_choice (sticker_id, design_id)` for FR-7.7.
+- **PIN operations** lock the `family_settings` row instead. No transaction takes both locks, so lock ordering can't deadlock.
+- **BR-10 and BR-11** (a sticker in only one open request, and one pending request per child) are checked under the child lock.
+
+### 7.2 Today and Day Rollover (FR-4.4, BR-4, BR-5)
+
+- `FamilyClock` combines an injected `java.time.Clock` (UTC) with `family_settings.time_zone`. `today()` is `LocalDate.now(clock.withZone(zone))`. `nextDayStartsAt()` is the start of tomorrow in that zone, as an instant, which handles DST.
+- The time zone is captured from the device when the PIN is first set up (`Intl.DateTimeFormat().resolvedOptions().timeZone`) and can be changed in Parent → Settings. Changing it affects which day is "today" from then on. Stored dates don't move.
+- `GET /api/bootstrap` returns `today`, `nextDayStartsAt`, and `serverTime`. The PWA works out its clock offset and refetches at the rollover moment, and also on `visibilitychange` and `focus`.
+- Every task write names the date the device is showing. A Child Mode write for a date that's no longer today gets `409 DAY_CHANGED`, and the PWA loads the new day instead of ticking the wrong one.
+
+### 7.3 Building the Daily Chart (§6.5)
+
+For child *c* and date *D ≤ today*: build the plan (§6.4), then for each routine look up its skip, the completions for that revision's tasks, and the sticker for (routine, D).
+
+| State | Condition |
+|---|---|
+| `SKIPPED` | A skip row exists for (routine, D). Hidden in Child Mode (I-5). |
+| `EARNED` | A sticker exists and has been claimed. |
+| `AWAITING_PICK` | A sticker exists and is `UNCLAIMED`. |
+| `IN_PROGRESS` | Some tasks are done. |
+| `NOT_STARTED` | No tasks are done and D is today. |
+| `MISSED` | No sticker and D is before today. |
+
+```mermaid
+stateDiagram-v2
+    [*] --> NotStarted
+    NotStarted --> InProgress: first task done
+    InProgress --> NotStarted: last done task undone
+    InProgress --> AwaitingPick: every task done, sticker earned
+    AwaitingPick --> Earned: child picks a sticker
+    NotStarted --> Skipped: parent skips the day
+    InProgress --> Skipped: parent skips the day
+    Skipped --> NotStarted: parent un-skips
+    NotStarted --> Missed: day ends
+    InProgress --> Missed: day ends
+    Missed --> AwaitingPick: parent finishes the past day
+```
+
+The chart response also lists unclaimed stickers from earlier days, which the child sees in a "Stickers to pick" tray (I-2).
+
+### 7.4 Completing and Undoing a Task (§6.6, FR-7.1–7.4)
+
+**Mark done:** `PUT /api/children/{c}/days/{D}/tasks/{t}` (idempotent)
+
+1. Resolve the actor: `PARENT` if the request carries a valid parent session, otherwise `CHILD`.
+2. Check D. If D is after today → `422 FUTURE_DATE` (BR-5). If D is before today and the actor is `CHILD` → `409 DAY_CHANGED` (BR-4).
+3. Lock child *c*.
+4. Load the revision for D. Check that the routine is scheduled and not skipped on D, and that task *t* is in that revision.
+5. If the routine already has a sticker for D, return its state unchanged: it's locked (FR-7.4).
+6. `INSERT … ON DUPLICATE KEY UPDATE task_id = task_id` into `task_completion`. (Not `INSERT IGNORE`, which also hides foreign-key errors.)
+7. If every task in the revision is now done, **earn** the sticker (§7.5).
+8. Commit, and return the routine's state, plus a `pick` object if the sticker was just earned.
+
+**Undo:** `DELETE` on the same path. If the routine has a sticker for D → `409 ROUTINE_LOCKED`. Otherwise, delete the completion row. A parent can also undo tasks on past days that haven't earned a sticker (FR-6.5).
+
+### 7.5 Earning and the Sticker Pick (FR-7.7–7.11, BR-6, BR-8)
+
+**Earn** (inside the completion transaction):
+
+1. Insert a `sticker` row: `UNCLAIMED`, with a snapshot of the routine's name and icon, and `chart_date = D`. The unique key makes a duplicate impossible (BR-7).
+2. Build the pool: designs that are `ACTIVE`, not the fallback, and whose category is `NULL` or enabled (FR-10.9).
+3. If the pool is empty, assign the fallback design, set the sticker to `AVAILABLE` and `claimed_at = now`, and mark the response `pick.autoAwarded = true` (FR-7.11).
+4. Otherwise, choose `min(3, pool size)` different designs uniformly at random (an injected `Random`, seeded in tests) and save them as `sticker_pick_choice` slots 1–3.
+
+**Claim:** `POST /api/stickers/{s}/pick {designId}`
+
+1. Lock the sticker's child.
+2. If the sticker is already claimed: return `200` if it's the same design (an idempotent double tap), or `409 ALREADY_CLAIMED` if it's a different one.
+3. `designId` must be one of the saved choices, otherwise `422 CHOICE_NOT_OFFERED`. The design's status isn't checked, so a design retired after the pick was made can still be picked (BR-8).
+4. Set `design_id`, `AVAILABLE`, and `claimed_at`, then delete the choices. The other two are thrown away (FR-7.8).
+
+`GET /api/stickers/{s}/pick` returns the saved choices, so a reload never changes them (FR-7.10, BR-6). Choices point at the live design rows, so an edited name or image always shows its latest version (BR-8, FR-10.4).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Child
+    participant PWA
+    participant API as Spring Boot API
+    participant DB as MySQL
+    Child->>PWA: Tap the last task
+    PWA->>PWA: Show the check right away, lock the tile
+    PWA->>API: PUT /api/children/7/days/2026-10-15/tasks/213
+    API->>DB: Lock child 7 (SELECT ... FOR UPDATE)
+    API->>DB: Insert task_completion
+    API->>DB: All tasks done, so insert UNCLAIMED sticker and 3 choices
+    API-->>PWA: 200 with routine AWAITING_PICK and pick with 3 choices
+    PWA->>Child: Confetti and fanfare
+    PWA->>Child: Sticker Pick with 3 stickers
+    Child->>PWA: Tap one sticker
+    PWA->>API: POST /api/stickers/955/pick with designId
+    API->>DB: Lock child, set design and AVAILABLE, delete choices
+    API-->>PWA: 200 with the sticker
+    PWA->>Child: Sticking animation into the Sticker Book
+```
+
+### 7.6 Prize Requests (§6.11, BR-10–BR-14)
+
+All of these run under the child lock.
+
+| Action | Who | Rules | Effect |
+|---|---|---|---|
+| Create | Child (FR-11.3) or parent (FR-11.12) | The child has no `PENDING` request (`409 PENDING_REQUEST_EXISTS`, BR-11). At least 1 sticker. Every sticker belongs to this child (BR-13) and is `AVAILABLE` (`409 STICKER_NOT_AVAILABLE`, BR-10). | Request is `PENDING`. Items are inserted. Stickers become `PENDING` and point at the request. |
+| Cancel | Child, for their own pending request (FR-11.6), or parent (FR-11.9) | The request is `PENDING`. | Stickers go back to `AVAILABLE` with `prize_request_id = NULL`. Request becomes `CANCELLED`, with `cancelled_by` recorded. |
+| Complete | Parent (FR-11.8) | The request is `PENDING`. `prizeText` is required (1–200 chars); `note` is optional (≤ 500). | Stickers become `USED`. Request becomes `COMPLETED`, with `completed_at`. |
+| Edit prize or note | Parent (FR-11.13) | The request is `COMPLETED`. | Text is updated. |
+| Reverse (Could) | Parent (FR-11.14) | The request is `COMPLETED`. | Stickers go back to `AVAILABLE`. Request becomes `REVERSED` and stays in history. |
+
+### 7.7 Routine Management (§6.2–6.4)
+
+- **Create** (FR-2.1, FR-4.2): inserts the routine, its tasks, and a revision effective today. All seven days are selected by default. The routine is added at the end of the order.
+- **Save** (FR-2.2, FR-2.6, FR-3.1–3.4, FR-4.1): the editor sends the whole definition in one `PUT`: name, icon, color, days, paused, and the ordered task list. Tasks that include an `id` keep their identity, tasks without one are created, and tasks left out are dropped from the new revision. The response includes `effectiveFrom`, so the editor can say *"Today's sticker is already earned. Your changes start tomorrow."*
+- **Delete** (FR-2.3): writes a revision with `deleted = true` from date E, and sets `routine.deleted_at` so the routine leaves the parent's list right away. Stickers keep their routine snapshot (BR-3).
+- **Reorder** (FR-2.4): `PUT …/routines/order` with the full list of IDs, rewritten in one transaction.
+- **Copy** (FR-2.5): creates a new routine with new task IDs and a revision effective today, for the target child.
+- **Skip** (FR-4.5): a `routine_skip` row for any date on which the routine hasn't earned a sticker (I-15).
+
+### 7.8 Parent Mode, PIN, and Sessions (§6.8)
+
+**First run, and after an Admin reset** (FR-8.5, FR-8.9): `family_settings.pin_hash` is `NULL`, so `bootstrap.setupRequired` is `true`. With no children set up, the PWA opens the welcome screen. With children, Child Mode works as usual and the Parent Mode button leads to creating a new PIN. The parent enters the PIN twice, and it's sent along with the device's time zone. The server saves it with a conditional `UPDATE … WHERE pin_hash IS NULL`, so if two devices race, the first one wins. Success opens a parent session.
+
+**Unlock** (FR-8.3, FR-8.7):
+
+1. Lock `family_settings`.
+2. If `pin_locked_until` is in the future → `429 PIN_LOCKED` with `retryAfterSeconds`.
+3. Check the PIN with BCrypt. On failure, increment `failed_pin_attempts`. On the 5th failure, set `pin_locked_until` and reset the counter. Repeated lockouts get longer: 1 min, 5 min, 15 min, then 60 min (I-7). The response is `401 PIN_INCORRECT` with the number of attempts left.
+4. On success, reset the counters and create a session.
+
+The lockout is shared by all devices. Devices have no identity, and a per-device counter could be reset just by clearing storage.
+
+**Sessions** (FR-8.4):
+
+- A 256-bit random token, sent in the cookie `sb_parent` with `HttpOnly; Secure; SameSite=Strict; Path=/api`. Only the token's SHA-256 is stored (`parent_session`).
+- A session is valid while `now < last_seen_at + idle timeout` and `now < expires_at`. The idle timeout defaults to 5 minutes and can be changed in Parent → Settings (I-8). The absolute limit is 12 hours. `last_seen_at` is updated at most every 30 seconds.
+- In Parent Mode, the PWA watches for taps and key presses, and sends `POST /api/parent/session/touch` at most once a minute while the parent is active. When the parent goes idle, the PWA calls `DELETE /api/parent/session` and returns to Child Mode. The Exit button does the same.
+- Everything under `/api/parent/**` requires a valid session (`ParentAuthInterceptor`). The shared endpoints (task completion, creating and cancelling Prize Requests) only use the session to decide who the actor is.
+
+**Change PIN** (FR-8.6): requires a session and the current PIN (wrong guesses count toward the lockout). Saves the new hash and deletes all other sessions.
+
+**Admin reset** (FR-8.8–8.10, TD-8). `V3__reset_pin_procedure.sql` creates:
+
+```sql
+CREATE PROCEDURE reset_parent_pin(IN p_admin_name VARCHAR(100))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
+  IF p_admin_name IS NULL OR TRIM(p_admin_name) = '' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'reset_parent_pin: admin name is required';
+  END IF;
+  START TRANSACTION;
+    UPDATE family_settings
+       SET pin_hash = NULL, pin_set_at = NULL,
+           failed_pin_attempts = 0, lockout_level = 0, pin_locked_until = NULL,
+           updated_at = UTC_TIMESTAMP(3)
+     WHERE id = 1;
+    DELETE FROM parent_session;
+    INSERT INTO pin_reset_log (reset_at, admin_name, db_user)
+    VALUES (UTC_TIMESTAMP(3), TRIM(p_admin_name), SESSION_USER());
+  COMMIT;
+END
+```
+
+`SESSION_USER()` records the MySQL login that ran the call. (`CURRENT_USER()` would record the procedure's definer instead.) The app reads PIN state from the database on every PIN request, so a reset takes effect immediately, without a restart. Children, routines, stickers, and history aren't touched. The step-by-step procedure is in §12.6.
+
+### 7.9 History (§6.9)
+
+`GET /api/parent/children/{c}/history?from&to` covers up to 62 days, ending no later than today. It returns, for each day and routine, the state from §7.3 and the done/total counts. Opening a day uses the normal chart endpoint with the parent session (FR-9.2), and that's also where tasks on past days can be fixed (FR-6.5). When a fix earns a sticker, the parent can open the Sticker Pick right away and hand the device to the child, or leave the sticker in the child's "Stickers to pick" tray (I-2).
+
+### 7.10 Sticker Library (§6.10)
+
+- **Starter set:** Flyway `V2` seeds 24 designs across Animals, Space, Food, and Vehicles (FR-10.2). Because seeding is a migration, it runs once. Deleting starter stickers doesn't bring them back.
+- **Add and edit** (FR-10.3, FR-10.4): a name (1–40 chars) and an artwork key from the catalog. Edits change the row every Sticker Book entry points to, so they show up everywhere.
+- **Retire and reactivate** (FR-10.5): changes `status`.
+- **Delete** (FR-10.6, BR-15): only allowed when no `sticker` and no open `sticker_pick_choice` uses the design (I-4). The foreign keys are `RESTRICT`, and the API answers `409 DESIGN_IN_USE` with "Retire it instead".
+- **Warning** (FR-10.7): the list response includes `activeCount`, and the page warns when it's below 3.
+- **Search and packs** (FR-10.8, FR-10.9): search by name, filter by status or category. Disabling a category removes its designs from the pick pool without changing their own status.
+
+## 8. API
+
+### 8.1 Conventions
+
+- JSON over HTTPS, under `/api`, with camelCase fields. Calendar days are `YYYY-MM-DD` in the family's time zone. Instants are ISO-8601 UTC.
+- Errors use RFC 9457 `application/problem+json` (Spring's built-in `ProblemDetail`) with a stable `code` field. The PWA reacts to `code`, never to message text.
+- Every write must send the header `X-Sticker-Bank: 1` (CSRF defense, §11.2).
+- Access levels: **Open** means anyone who can reach the app (Child Mode). **Parent** requires a valid parent session. **Open/Parent** is open, but a parent session changes what's allowed.
+- OpenAPI is served at `/api/openapi.json`. A backend test writes the spec to `frontend/src/api/openapi.json`, and CI fails if the committed copy is out of date.
+
+### 8.2 Endpoints
+
+**Child Mode**
+
+| Method | Path | Access | Purpose | FDD |
+|---|---|---|---|---|
+| GET | `/api/bootstrap` | Open | `setupRequired`, `today`, `nextDayStartsAt`, `serverTime`, `timeZone`, children, `pendingPrizeRequestCount`, `parentIdleTimeoutSeconds`, `appVersion` | FR-1.6, FR-8.5, FR-11.11 |
+| GET | `/api/children/{childId}/days/{date or today}` | Open | Daily Chart (past days are read-only) | §6.5, FR-9.2 |
+| PUT | `/api/children/{childId}/days/{date}/tasks/{taskId}` | Open/Parent | Mark a task done (past dates need Parent) | FR-6.1, FR-6.5 |
+| DELETE | `/api/children/{childId}/days/{date}/tasks/{taskId}` | Open/Parent | Undo | FR-6.2 |
+| GET | `/api/stickers/{stickerId}/pick` | Open | The saved choices | FR-7.10, BR-6 |
+| POST | `/api/stickers/{stickerId}/pick` | Open | Claim `{designId}` | FR-7.8 |
+| GET | `/api/children/{childId}/stickers?status=&cursor=` | Open | A Sticker Book page, plus counts | FR-7.5, FR-7.6, FR-11.15–11.18 |
+| GET | `/api/stickers/{stickerId}` | Open | One sticker, with the prize and date if it's Used | FR-11.17 |
+| GET | `/api/children/{childId}/prize-requests/pending` | Open | The pending request, or `null` | FR-11.6, BR-11 |
+| POST | `/api/children/{childId}/prize-requests` | Open/Parent | Create `{stickerIds}` | FR-11.3, FR-11.12 |
+| POST | `/api/prize-requests/{id}/cancel` | Open/Parent | Cancel a pending request | FR-11.6, FR-11.9 |
+
+**Parent session and settings**
+
+| Method | Path | Access | Purpose | FDD |
+|---|---|---|---|---|
+| POST | `/api/parent/pin` | Open, only while no PIN is set | Create the PIN `{pin, timeZone}`, which opens a session | FR-8.5, FR-8.9 |
+| PUT | `/api/parent/pin` | Parent | Change the PIN `{currentPin, newPin}` | FR-8.6 |
+| POST | `/api/parent/session` | Open | Unlock `{pin}` | FR-8.3, FR-8.7 |
+| GET | `/api/parent/session` | Parent | Check that the session is still valid | |
+| POST | `/api/parent/session/touch` | Parent | Keep the session alive | FR-8.4 |
+| DELETE | `/api/parent/session` | Parent | Exit Parent Mode | FR-8.4 |
+| GET, PUT | `/api/parent/settings` | Parent | Time zone, idle timeout, and the last PIN reset (read-only) | FR-4.4, FR-8.4, FR-8.10 |
+
+**Children, routines, history**
+
+| Method | Path | Access | Purpose | FDD |
+|---|---|---|---|---|
+| GET, POST | `/api/parent/children` | Parent | List, create | FR-1.1, FR-1.2 |
+| PUT, DELETE | `/api/parent/children/{childId}` | Parent | Edit, delete (cascades) | FR-1.3 |
+| GET, POST | `/api/parent/children/{childId}/routines` | Parent | List current definitions, create | FR-2.1 |
+| PUT | `/api/parent/children/{childId}/routines/order` | Parent | Reorder | FR-2.4 |
+| GET, PUT, DELETE | `/api/parent/routines/{routineId}` | Parent | Read, save the whole definition, delete | FR-2.2, FR-2.3, FR-2.6, §6.3, FR-4.1–4.3 |
+| POST | `/api/parent/routines/{routineId}/copy` | Parent | Copy to `{targetChildId}` | FR-2.5 |
+| PUT, DELETE | `/api/parent/routines/{routineId}/skips/{date}` | Parent | Skip or un-skip one day | FR-4.5 |
+| GET | `/api/parent/children/{childId}/history?from=&to=` | Parent | Calendar data | FR-9.1 |
+
+**Sticker Library and Prize Requests**
+
+| Method | Path | Access | Purpose | FDD |
+|---|---|---|---|---|
+| GET, POST | `/api/parent/library/designs` | Parent | List (`q`, `status`, `categoryId`, with `activeCount`), add | FR-10.1, FR-10.3, FR-10.7, FR-10.8 |
+| PUT, DELETE | `/api/parent/library/designs/{id}` | Parent | Edit, delete | FR-10.4, FR-10.6 |
+| PUT | `/api/parent/library/designs/{id}/status` | Parent | `ACTIVE` or `RETIRED` | FR-10.5 |
+| GET, POST, PUT, DELETE | `/api/parent/library/categories[/{id}]` | Parent | Packs, turned on or off | FR-10.9 |
+| GET | `/api/parent/prize-requests?status=&childId=&cursor=` | Parent | Pending list, history | FR-11.7, FR-11.10 |
+| POST | `/api/parent/prize-requests/{id}/complete` | Parent | `{prizeText, note}` | FR-11.8 |
+| PUT | `/api/parent/prize-requests/{id}` | Parent | Edit the prize text or note | FR-11.13 |
+| POST | `/api/parent/prize-requests/{id}/reverse` | Parent | Reverse (Could) | FR-11.14 |
+
+### 8.3 Examples
+
+**Daily Chart**
+
+```json
+GET /api/children/7/days/today
+
+{
+  "childId": 7,
+  "date": "2026-10-15",
+  "isToday": true,
+  "routines": [
+    {
+      "routineId": 31,
+      "name": "Morning School Routine",
+      "iconKey": "sun",
+      "color": "#FFB703",
+      "state": "IN_PROGRESS",
+      "doneCount": 2,
+      "taskCount": 4,
+      "tasks": [
+        { "taskId": 210, "label": "Brush teeth",   "iconKey": "toothbrush", "done": true  },
+        { "taskId": 211, "label": "Get dressed",   "iconKey": "t-shirt",    "done": true  },
+        { "taskId": 212, "label": "Eat breakfast", "iconKey": "bowl",       "done": false },
+        { "taskId": 213, "label": "Shoes on",      "iconKey": "sneaker",    "done": false }
+      ],
+      "sticker": null
+    }
+  ],
+  "unclaimedFromEarlierDays": [
+    { "stickerId": 902, "chartDate": "2026-10-14", "routineName": "Bedtime" }
+  ]
+}
+```
+
+**Completing the last task**
+
+```json
+PUT /api/children/7/days/2026-10-15/tasks/213
+
+200 OK
+{
+  "routine": { "routineId": 31, "state": "AWAITING_PICK", "doneCount": 4, "taskCount": 4 },
+  "pick": {
+    "stickerId": 955,
+    "autoAwarded": false,
+    "choices": [
+      { "designId": 4,  "name": "Happy Whale", "artworkKey": "whale"  },
+      { "designId": 12, "name": "Rocket",      "artworkKey": "rocket" },
+      { "designId": 19, "name": "Taco",        "artworkKey": "taco"   }
+    ]
+  }
+}
+```
+
+**Error**
+
+```json
+409 Conflict
+Content-Type: application/problem+json
+
+{ "type": "about:blank", "status": 409, "title": "This routine is finished for today", "code": "ROUTINE_LOCKED" }
+```
+
+### 8.4 Error Codes
+
+| Code | HTTP | When |
+|---|---|---|
+| `VALIDATION_FAILED` | 400 | Invalid request body. Includes field errors. |
+| `PARENT_SESSION_REQUIRED` | 401 | A Parent endpoint was called without a valid session. |
+| `PIN_INCORRECT` | 401 | Wrong PIN. Includes `attemptsRemaining`. |
+| `PIN_LOCKED` | 429 | In the cooldown. Includes `retryAfterSeconds`. |
+| `PIN_NOT_SET` / `PIN_ALREADY_SET` | 409 | Unlock before setup, or setup after a PIN exists. |
+| `DAY_CHANGED` | 409 | A Child Mode write for a day that's no longer today. Includes `today`. |
+| `FUTURE_DATE` | 422 | A write for a date after today. |
+| `ROUTINE_NOT_SCHEDULED` | 409 | The routine isn't on the chart for that date. |
+| `ROUTINE_LOCKED` | 409 | Undo after the sticker was earned. |
+| `ALREADY_CLAIMED` | 409 | The pick was already claimed with a different design. |
+| `CHOICE_NOT_OFFERED` | 422 | The design isn't one of the saved choices. |
+| `PENDING_REQUEST_EXISTS` | 409 | BR-11 |
+| `STICKER_NOT_AVAILABLE` | 409 | BR-10, BR-13 |
+| `REQUEST_NOT_PENDING` / `REQUEST_NOT_COMPLETED` | 409 | Wrong state for this action. |
+| `DESIGN_IN_USE` | 409 | BR-15 / I-4. Retire the design instead. |
+| `NOT_FOUND` | 404 | Unknown ID. |
+
+## 9. Frontend (PWA)
+
+### 9.1 Screens and Routes
+
+| Route | Screen | Mode |
+|---|---|---|
+| `/` | Goes to this device's last-selected child, or shows the child picker | Child |
+| `/c/:childId` | Daily Chart | Child |
+| `/c/:childId/pick/:stickerId` | Sticker Pick. It's a route, so a reload reopens the same pick. | Child |
+| `/c/:childId/book` | Sticker Book | Child |
+| `/c/:childId/prize` | Get a Prize | Child |
+| `/welcome` | First run: create the PIN | n/a |
+| `/parent` | Parent home: pending Prize Requests and shortcuts | Parent |
+| `/parent/children`, `/parent/children/:id` | Child profiles | Parent |
+| `/parent/children/:id/routines`, `/parent/routines/:id` | Routine list, routine editor | Parent |
+| `/parent/history/:childId` | Calendar, and day detail with past-day fixes | Parent |
+| `/parent/library` | Sticker Library | Parent |
+| `/parent/prizes` | Prize Requests and their history | Parent |
+| `/parent/settings` | PIN, time zone, idle timeout, sounds, install help, licenses | Parent |
+
+The `/parent/*` routes sit behind a guard that calls `GET /api/parent/session` and shows the PIN pad if the session isn't valid. The guard is only for the user experience. The server enforces access on every request (§11).
+
+### 9.2 State
+
+- **Server state** lives in TanStack Query, with keys such as `['bootstrap']`, `['chart', childId, date]`, `['book', childId, status]`, `['pick', stickerId]`, and `['pendingRequest', childId]`.
+- **Refreshing:** refetch on focus and on reconnect. `bootstrap` and today's chart poll every 30 s while visible, which picks up the pending-request badge and changes from other devices. The parent's Prize Requests page polls every 15 s while open.
+- **Device-only preferences** live in `localStorage`, with every access wrapped in try/catch: the last-selected child and sounds on/off. These are per device on purpose, so each child's tablet can open to that child.
+- **App state** lives in React context: the current mode (child or parent), online status, and whether a service worker update is waiting.
+
+### 9.3 Child Mode Interaction (§6.5, §6.6, A-4, A-5)
+
+- **Touch targets** are at least 72 × 72 CSS px, with at least 16 px between them: well above the usual 44 px guideline, for toddler fingers. Task icons are at least 56 px, and labels are 22–24 px in Andika. Text always comes with an icon (A-5).
+- **Done looks different in three ways:** a check badge, a color fill, and a little pop of the icon. Color is never the only cue.
+- **Taps are optimistic.** The check appears immediately while the request goes out, and rolls back on error. A task ignores taps while its request is in flight, and ignores a second tap within 600 ms, so a toddler's double tap doesn't immediately undo the task.
+- **The celebration waits for the server** after the last task, because the server decides whether the sticker is earned and returns the choices (typically under 100 ms on a LAN).
+- **Focus** (FR-5.6): finished routines collapse, and the first unfinished routine is highlighted and scrolled into view. No time-of-day settings are needed.
+- **No accidental gestures:** `touch-action: manipulation` (no double-tap zoom), `overscroll-behavior: none` (no pull-to-refresh), no text selection or long-press menus in Child Mode, and nothing that depends on hover.
+- **Layout:** on a phone, routine cards stack. On a tablet in landscape, routines sit side by side. Safe-area insets are respected.
+- **Get a Prize** (FR-11.1–11.6): selected stickers lift and show a check, with a large counter. The screen switches to "Waiting for grown-up" (with a cancel button) while a request is pending. Friendly empty states, as specified in the FDD.
+- **Parent Mode button:** small, in a top corner, with the pending-requests badge (FR-11.11). Suggestion: press and hold for 1 s to open the PIN pad, so toddler taps don't keep triggering the shared lockout (I-12).
+- **Kiosk use:** the runbook recommends iOS Guided Access or Android screen pinning on the child's tablet.
+
+### 9.4 Celebrations and Sound (FR-6.4, FR-7.2, FR-7.8, FR-7.9)
+
+- **Task done:** a small bounce and a "pop" sound.
+- **Routine done:** full-screen confetti (canvas-confetti) and a fanfare for about 2.5 s. Then the Sticker Pick shows three large cards, with artwork at least 160 px and the name underneath. Tapping one plays a "sticking" animation as it flies to the Sticker Book button (a Motion shared-layout animation).
+- **Reduced motion:** with `prefers-reduced-motion`, confetti becomes a gentle glow and fade.
+- **Audio:** short, preloaded clips played through Web Audio. The audio context unlocks on the first tap, which iOS requires. Sound can be turned off per device.
+
+### 9.5 PWA
+
+- **Manifest:** name "Sticker Bank", `display: standalone`, `orientation: any`, `start_url` and `scope` of `/`, theme and background colors, 192 and 512 px icons plus a 512 px maskable icon, and an `apple-touch-icon`.
+- **Service worker** (vite-plugin-pwa / Workbox): precaches the app shell, fonts, sounds, and every artwork file (about 2–3 MB as 256 px WebP), so the app opens instantly and pictures never pop in. It does **not** cache API responses (§9.6).
+- **Updates:** `registerType: 'prompt'`. In Child Mode, a waiting update is applied at a safe moment (when the app comes back to the foreground, or at day rollover), never during a celebration. In Parent Mode, a "New version, reload" toast appears. The PWA compares `bootstrap.appVersion` with its own build version and checks for an update right away if they differ.
+- **Install:** on Android and desktop Chrome, Parent → Settings shows an Install button (`beforeinstallprompt`). On iOS, it shows "Share → Add to Home Screen" instructions. An installed iOS PWA keeps its own cookies, so its parent session is separate from Safari's.
+- **The origin must never change.** The installed app, its service worker, and the device preferences are all tied to the exact hostname. Choose it once (§12.4).
+
+### 9.6 Offline Behavior (TD-7)
+
+- Child Mode queries (bootstrap, today's chart, the Sticker Book) are persisted to IndexedDB through TanStack Query's persister, kept for up to 7 days. Parent data isn't persisted.
+- When requests fail or the browser reports it's offline, the app greys out the last data, shows a friendly "Waiting for Wi-Fi…" cloud, and disables taps. TanStack's online manager retries with backoff and on the `online` event, and the app picks back up on its own.
+- Writes are never queued. A tap during an outage fails gently and rolls back.
+- Leaving API caching out of the service worker means the app always knows when it's offline. It can't mistake a cached response for a live one.
+
+### 9.7 Artwork Pipeline (FR-3.2, FR-10.2, FR-10.3)
+
+- `artwork/catalog.json` lists each image: `key`, default `name`, `tags`, `uses` (sticker, task, routine, avatar), `category`, and the source file. The images are curated from Fluent Emoji (3D), which has both the everyday objects tasks need (toothbrush, shoes, toilet, bath, book, bed…) and fun sticker subjects.
+- `npm run artwork` converts the sources to 256 px WebP in `frontend/public/artwork/` and generates `catalog.ts`. The output is committed, since artwork changes rarely. The Docker build copies `catalog.json` into the backend's resources, so the API can reject unknown keys.
+- The pickers (task icon, routine icon, avatar, sticker art) are searchable grids filtered by `uses`.
+- **License:** Fluent Emoji is MIT-licensed. The license text ships at `/licenses/` and is linked from Parent → Settings.
+
+### 9.8 Device Support
+
+Current iPadOS/iOS Safari and Android Chrome, on tablets and phones. Vite's default build target ("Baseline widely available", roughly Safari 16+ and Chrome 107+) sets the minimum. That matters for hand-me-down tablets. If an older tablet has to work, add `@vitejs/plugin-legacy`.
+
+### 9.9 Accessibility
+
+Task tiles are real `<button>` elements with `aria-pressed`. Progress is announced through `aria-live`. Focus is trapped in dialogs and the PIN pad. Text contrast is at least 4.5:1 on every child theme color, because the palette is a fixed set checked at design time. Everything in Parent Mode works with a keyboard.
+
+## 10. Backend Details
+
+### 10.1 Layering
+
+`Controller` (HTTP, DTO validation, working out the actor) → `Service` (transaction boundary, business rules, child lock) → `Repository` (Spring Data JDBC) or query classes (`JdbcClient`). Domain errors are thrown as `DomainException(code, httpStatus)` and turned into `ProblemDetail` responses by a single `@RestControllerAdvice`.
+
+Main services: `FamilyClock`, `ChartService`, `CompletionService`, `StickerPickService`, `StickerBookService`, `RoutineService` (with `RevisionPolicy`), `PrizeRequestService`, `LibraryService`, `PinService`, `ParentSessionService`, `ArtworkCatalog`.
+
+### 10.2 Validation Limits
+
+| Field | Rule |
+|---|---|
+| Child name | 1–40 chars, trimmed |
+| Routine name, task label | 1–60 chars |
+| Tasks per routine | 0–30. Zero is allowed, but the routine won't appear on a chart (FR-3.5). |
+| Days | At least 1 weekday. Use Pause to switch a routine off (I-14). |
+| Colors | From the fixed palette |
+| Artwork keys | Must exist in the catalog, with the right `uses` |
+| PIN | Exactly 4 digits |
+| Prize text / note | 1–200 / 0–500 chars |
+| Sticker design name | 1–40 chars |
+| Time zone | A valid IANA region ID |
+
+### 10.3 Configuration
+
+```yaml
+# application.yaml (excerpt)
+server:
+  port: 8080
+  shutdown: graceful
+  forward-headers-strategy: framework
+  compression:
+    enabled: true
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 8
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+  flyway:
+    enabled: true
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+logging:
+  structured:
+    format:
+      console: ecs
+sticker-bank:
+  parent-session:
+    absolute-max: 12h
+    cookie-secure: true              # false only for http://localhost development
+  pin:
+    attempts-before-lockout: 5
+    cooldowns: [1m, 5m, 15m, 60m]
+```
+
+Supplied through the environment: `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `JAVA_TOOL_OPTIONS`. `APP_VERSION` is baked in at build time. A Prometheus endpoint on 8081 is optional: add `micrometer-registry-prometheus` if the cluster runs Prometheus.
+
+### 10.4 Migrations
+
+- `V1__schema.sql` creates the tables and the single settings row. `V2__seed_sticker_library.sql` adds the categories, 24 designs, and the fallback design. `V3__reset_pin_procedure.sql` creates the procedure, using Flyway's MySQL `DELIMITER` support.
+- Migrations run at startup. Flyway's lock serializes pods that start at the same time.
+- **Expand/contract:** a release may only add things (nullable or defaulted columns, new tables). Removals ship one release later. During a rolling update, the old pod keeps working against the new schema.
+
+### 10.5 Logging
+
+Structured JSON to stdout. Domain events are logged at INFO: sticker earned, pick claimed, Prize Request created, completed, or cancelled, PIN set or changed, lockouts. PINs, tokens, and cookie values are never logged.
+
+## 11. Security and Privacy
+
+### 11.1 Threat Model
+
+**Data:** children's first names, avatars, routines, and prize history. Low sensitivity, but personal, and about children. **Who might reach it:** the child (wandering into setup), guests on the home Wi-Fi, other devices on the LAN, and members of the VPN. The internet is excluded by design (TD-6).
+
+### 11.2 Controls
+
+| Area | Control |
+|---|---|
+| Network | Reachable only through an ingress on the LAN or VPN. NetworkPolicy allows the ingress controller to reach port 8080 on the pod, and the pod to reach MySQL on 3306 and DNS. Nothing else. The management port 8081 isn't part of the Service. |
+| Transport | TLS at the ingress. HSTS added by the app's header filter. |
+| Parent Mode | 4-digit PIN, hashed with BCrypt. Shared lockout with escalating cooldowns. Session tokens stored hashed, with idle and absolute expiry. Every `/api/parent/**` call is authorized on the server. |
+| Child Mode | Open by design (A-2). It can only do what the child's screens can do. |
+| CSRF | `SameSite=Strict` cookie, plus the required `X-Sticker-Bank` header on writes, plus no CORS. A page on another site can't send that header without a preflight request, and the server never approves preflights. |
+| Browser | CSP `default-src 'self'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'`. Also `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and a restrictive `Permissions-Policy`. No third-party scripts, fonts, analytics, or CDNs. |
+| Input | Bean Validation on every DTO. React escapes all text. No user-supplied HTML anywhere. |
+| Container | Non-root UID 10001, read-only root filesystem (`/tmp` is an `emptyDir`), all Linux capabilities dropped, `seccompProfile: RuntimeDefault`, no service account token. |
+| Database | The app's MySQL user is limited to the `sticker_bank` schema: data changes, the DDL Flyway needs, and `CREATE ROUTINE`, `ALTER ROUTINE`, `EXECUTE`. Credentials live in a Kubernetes Secret (Sealed Secrets, SOPS, or External Secrets if using GitOps). |
+| Admin | A PIN reset requires MySQL credentials (TD-8). The audit row records the name given and the MySQL login. |
+| Backups | They contain children's data, so they're encrypted or kept only on trusted storage. |
+
+### 11.3 Why Not Spring Security
+
+The only thing that ever authenticates is "a parent with the PIN". A small interceptor and a cookie service are easier to read and test than a custom Spring Security filter chain built for that one case. If separate caregiver profiles arrive (FDD §10), move to Spring Security then.
+
+### 11.4 Accepted Risks
+
+- Anyone on the home network or VPN can use Child Mode. This is accepted in A-2.
+- A 4-digit PIN has 10,000 combinations. With the lockout schedule, guessing it would take weeks of non-stop trying from inside the network. That's enough against a toddler or a guest, which is the threat the FDD describes.
+- After an Admin reset, whoever opens Parent Mode first sets the new PIN. The runbook says to reset only when the parent is ready with the device.
+- BCrypt can't really protect a 4-digit PIN from someone who already has the database. Such a person already has all the data anyway. Hashing keeps the PIN out of plain sight in backups and logs.
+
+## 12. Build and Deployment
+
+### 12.1 Container Image
+
+```dockerfile
+# syntax=docker/dockerfile:1
+
+# 1) Build the PWA (runs on the build machine's own architecture)
+FROM --platform=$BUILDPLATFORM node:24-alpine AS web
+WORKDIR /src/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+COPY frontend/ ./
+ARG APP_VERSION=dev
+RUN VITE_APP_VERSION=$APP_VERSION npm run build              # -> /src/frontend/dist
+
+# 2) Build the Spring Boot jar with the PWA inside it
+FROM --platform=$BUILDPLATFORM eclipse-temurin:25-jdk AS api
+WORKDIR /src/backend
+COPY backend/ ./
+COPY --from=web /src/frontend/dist/ src/main/resources/static/
+COPY artwork/catalog.json src/main/resources/artwork/catalog.json
+ARG APP_VERSION=dev
+RUN --mount=type=cache,target=/root/.gradle \
+    ./gradlew --no-daemon bootJar -PappVersion=$APP_VERSION \
+ && java -Djarmode=tools -jar build/libs/sticker-bank.jar extract --layers --launcher --destination /out
+
+# 3) Runtime: JRE only, non-root
+FROM eclipse-temurin:25-jre
+RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --no-create-home app
+WORKDIR /app
+COPY --from=api /out/dependencies/ ./
+COPY --from=api /out/spring-boot-loader/ ./
+COPY --from=api /out/snapshot-dependencies/ ./
+COPY --from=api /out/application/ ./
+USER 10001:10001
+EXPOSE 8080 8081
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=60"
+ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
+```
+
+- The two build stages run on the build machine's own architecture (`--platform=$BUILDPLATFORM`). JavaScript and JVM bytecode are portable, so only the small runtime stage differs per architecture. Build with `docker buildx build --platform linux/amd64,linux/arm64`.
+- Tests don't run inside the image build, because Testcontainers needs Docker. CI runs them first (§12.7).
+- Tag images with a version plus the commit (e.g. `1.4.0` and `sha-abc1234`). Never use `latest` in manifests.
+
+### 12.2 Kubernetes Resources
+
+```
+deploy/k8s/
+├── base/               namespace, deployment, service, configmap, networkpolicy, kustomization
+├── overlays/home/      image tag, ingress (option A or B), secret reference
+└── optional/mysql/     StatefulSet, PVC, Service, backup CronJob
+```
+
+| Resource | Notes |
+|---|---|
+| Namespace | `sticker-bank` |
+| Deployment | 1 replica. The app is stateless, so 2 also works. RollingUpdate with `maxSurge: 1`, `maxUnavailable: 0`. |
+| Service | ClusterIP, port 80 → 8080 only |
+| Ingress | §12.4 |
+| ConfigMap | Non-secret environment: datasource URL, JVM options |
+| Secret | Database username and password |
+| NetworkPolicy | As in §11.2 |
+
+```yaml
+# base/deployment.yaml (excerpt)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sticker-bank
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app.kubernetes.io/name: sticker-bank }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: sticker-bank }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: app
+          image: registry.example/sticker-bank:1.0.0
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: management, containerPort: 8081 }
+          envFrom:
+            - configMapRef: { name: sticker-bank-config }
+            - secretRef: { name: sticker-bank-db }
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits: { memory: 640Mi }        # no CPU limit: it throttles JVM startup
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: management }
+            periodSeconds: 5
+            failureThreshold: 36             # up to 3 minutes on slow nodes
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: management }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: management }
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+```
+
+Liveness doesn't include the database, so a MySQL outage doesn't send the pod into a restart loop. Readiness does include it, so traffic stops while the database is unreachable and the PWA shows its offline state.
+
+### 12.3 MySQL
+
+- **Version:** MySQL 8.4 LTS.
+- **Default: bring your own.** Use an existing server or operator, and create the database and user:
+
+  ```sql
+  CREATE DATABASE sticker_bank CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+  CREATE USER 'sticker_bank'@'%' IDENTIFIED BY '<from your secret store>';
+  GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES,
+        CREATE ROUTINE, ALTER ROUTINE, EXECUTE
+     ON sticker_bank.* TO 'sticker_bank'@'%';
+  ```
+
+- **Optional in-cluster MySQL** (`deploy/k8s/optional/mysql/`): a single-instance StatefulSet (`mysql:8.4`) with a 5 Gi PVC and a ClusterIP Service. That's plenty for one family. The data grows by a few MB a year.
+- **Datasource URL:** `jdbc:mysql://<host>:3306/sticker_bank?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true`
+- **Backups:** a nightly CronJob runs `mysqldump --single-transaction --routines --triggers sticker_bank` and writes a compressed file to a NAS, PVC, or S3-compatible bucket, kept for 30 days. `--routines` matters: it's how `reset_parent_pin` gets restored. Test a restore once before relying on it. Recovery point: 24 hours.
+
+### 12.4 Ingress and TLS (LAN / VPN Only)
+
+Service workers need HTTPS, so both options provide a real certificate.
+
+| | Option A: LAN ingress + cert-manager | Option B: Tailscale Kubernetes operator |
+|---|---|---|
+| URL | `https://stickers.home.example.com` | `https://sticker-bank.<tailnet>.ts.net` |
+| Reachable from | Home Wi-Fi. Away from home, over your VPN into the LAN. | Any device running Tailscale, at home or away |
+| TLS | Let's Encrypt DNS-01 through cert-manager. No inbound internet access needed. | Automatic Tailscale certificates |
+| Needs | An ingress controller on a LAN-only IP (MetalLB or kube-vip), plus a DNS record | The Tailscale app on every family device, including the child's tablet |
+
+For option A, use Traefik or a Gateway API implementation (ingress-nginx has been retired).
+
+```yaml
+# Option A: LAN ingress with cert-manager
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sticker-bank
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [stickers.home.example.com]
+      secretName: sticker-bank-tls
+  rules:
+    - host: stickers.home.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: sticker-bank, port: { name: http } }
+---
+# Option B: Tailscale operator
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sticker-bank
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service: { name: sticker-bank, port: { name: http } }
+  tls:
+    - hosts: [sticker-bank]
+```
+
+Whichever option you choose, **keep the hostname forever** (§9.5).
+
+### 12.5 Local Development
+
+Neither mode needs a database server that you install or keep running (TD-16).
+
+| Mode | Command | What runs | Use it for |
+|---|---|---|---|
+| **UI only** | `npm run dev:mock` | Vite, with an in-browser mock API (MSW). No Java, no database. | Toddler screens, celebrations, parent forms, edge-case states |
+| **Full stack** | `./gradlew bootTestRun`, then `npm run dev` | Spring Boot with a throwaway MySQL 8.4 container. Vite proxies `/api` to `localhost:8080`. | Anything that touches business rules, the API, or the schema |
+
+**Full stack.** Spring Boot's Testcontainers development mode starts MySQL 8.4 in a container when the app starts, points the datasource at it (`@ServiceConnection`), runs the Flyway migrations, and loads a demo family. The only prerequisite is a container runtime. OrbStack and Docker Desktop work with Testcontainers out of the box. Colima needs a couple of environment variables (see the Testcontainers docs). The same runtime builds the image locally (§12.1).
+
+```kotlin
+// backend/src/test/kotlin/com/stickerbank/dev/TestStickerBankApplication.kt
+fun main(args: Array<String>) {
+    fromApplication<StickerBankApplication>()
+        .with(MySqlContainerConfig::class, DemoDataSeeder::class)
+        .run("--spring.profiles.active=dev", *args)
+}
+
+@TestConfiguration(proxyBeanMethods = false)
+class MySqlContainerConfig {
+    @Bean
+    @ServiceConnection
+    @RestartScope // keep the container across DevTools restarts
+    fun mysql() = MySQLContainer(DockerImageName.parse("mysql:8.4"))
+}
+```
+
+- **It lives in the test source set,** so none of it (the container config, the demo seeder, the demo PIN) can end up in the production image.
+- **Fresh data on every run.** `DemoDataSeeder` fills the empty database with a demo family: PIN `1234`, two children, Morning and Bedtime routines, two weeks of history, stickers in every status, and one pending Prize Request. To keep your data between runs instead, turn on Testcontainers reuse (`testcontainers.reuse.enable=true` in `~/.testcontainers.properties`, plus `.withReuse(true)` on the container). A reused container keeps running after the app stops, until you remove it.
+- **Same database as the tests.** The integration tests import the same `MySqlContainerConfig`, so dev, tests, and CI all run the same MySQL image and the same migrations.
+- **Gradle setup:** DevTools goes in the `testAndDevelopmentOnly` configuration, so `@RestartScope` works under `bootTestRun`. The `dev` profile sets `cookie-secure: false`, for browsers that reject `Secure` cookies on `http://localhost`.
+
+**UI only.** MSW intercepts `/api` requests in the browser and answers them from an in-memory fake. The fake is typed with the generated OpenAPI types, so if it drifts from the real API, `tsc` fails. It covers only the main rules: a sticker is earned when every task is done, the 3-choice pick, sticker statuses, and one pending request per child. The backend tests prove the real rules. Named scenarios set the starting state from the URL: `?scenario=fresh-install` (PIN setup), `one-task-left`, `pick-waiting`, `empty-library` (fallback sticker), `pending-request`, `offline`. Vitest uses the same handlers. The PWA service worker is off in dev, so it doesn't clash with MSW's worker, and `mockServiceWorker.js` is left out of production builds.
+
+**PWA behavior** (service worker, install, updates): test with `npm run build && npm run preview`, or against a deployed build. To try the app on a real tablet, deploy to a dev namespace or go through Tailscale, because the tablet needs HTTPS for the service worker.
+
+**Why not SQLite or H2.** Either would remove the need for a container runtime, but only by adding a second SQL dialect. SQLite has no row locks (`SELECT … FOR UPDATE`), no `ON DUPLICATE KEY UPDATE`, no `ENUM`, no stored procedures, and no date types. It doesn't enforce `VARCHAR` lengths, leaves foreign keys off by default, and has no Spring Data JDBC dialect. H2's MySQL mode is closer, but it has no stored procedures and differs in collation and built-in functions. With either one, the locking and constraint code that protects sticker counts (§7.1) would behave differently in dev than in production.
+
+### 12.6 Runbooks (to write in `docs/runbooks/`)
+
+| Runbook | Steps |
+|---|---|
+| **Reset the parent PIN** (FR-8.8) | 1. Make sure the parent is ready to set a new PIN right away (§11.4). 2. `kubectl -n <mysql-namespace> exec -it <mysql-pod> -- mysql -u <admin-user> -p sticker_bank -e "CALL reset_parent_pin('Your Name');"`. 3. On any device, open Parent Mode and create the new PIN. 4. Audit trail: `SELECT * FROM pin_reset_log ORDER BY reset_at DESC;` |
+| **Back up and restore** | Where the dumps are, how to restore into an empty database, and how to check the result. |
+| **Upgrade** | Bump the image tag in `overlays/home`. The rolling update runs migrations on startup. |
+| **Lock the child's tablet to the app** | iOS Guided Access, Android screen pinning. |
+| **Change the time zone** | Parent → Settings. What changes, and what doesn't. |
+
+### 12.7 CI/CD (Suggested)
+
+1. Lint: ktlint, detekt, ESLint, `tsc`.
+2. Backend tests with Testcontainers, plus the OpenAPI drift check.
+3. Frontend unit tests.
+4. Build the multi-arch image and push it to your registry.
+5. End-to-end tests: Playwright against `compose`, using the new image and MySQL.
+6. Deploy: bump the image tag in `overlays/home`, directly or through Argo CD or Flux.
+
+## 13. Testing Strategy
+
+| Level | Tools | Focus |
+|---|---|---|
+| Backend unit | JUnit, MockK, fixed `Clock`, seeded `Random` | `RevisionPolicy`, weekday masks, pick generation (including pools of fewer than 3 and of 0), lockout escalation, DST and midnight boundaries |
+| Backend integration | `@SpringBootTest` + Testcontainers MySQL 8.4 | One test per business rule (§15.2), full flows, the `reset_parent_pin` procedure, child-deletion cascades, migrations from an empty database |
+| Concurrency | Integration tests with parallel threads | Two devices finish the last task at the same moment: exactly one sticker. Two Prize Requests at once: one wins. Two claims: one design. |
+| Contract | OpenAPI snapshot | Spec drift fails CI. Frontend types are regenerated from it. |
+| Frontend unit | Vitest, React Testing Library, MSW, fake timers | Task tile states and the double-tap guard, the pick and reloading it, prize selection, the idle timeout, day rollover, the offline state |
+| End-to-end | Playwright with iPad and phone profiles, touch enabled | First run. Earn → pick → Sticker Book. Reload in the middle of a pick keeps the choices. Prize Request lifecycle. Past-day fix. PIN lockout. Admin reset → new PIN. |
+| Manual | A real iPad and Android tablet, with the app installed | Installing, sounds, the offline state, the update flow, Guided Access |
+
+## 14. Non-Functional Targets
+
+| Area | Target |
+|---|---|
+| Responsiveness | Tap feedback under 50 ms (optimistic). API p95 under 200 ms on the LAN. The installed PWA shows the chart within 2 s of launch. |
+| Scale | 1 family, up to 6 children, 10 routines per child, 30 tasks per routine, and 10 devices. |
+| Footprint | 1 pod with about 400–600 MiB of memory and a 100m CPU request. MySQL stays under 100 MB for years. |
+| Availability | Home-lab best effort. Rolling updates without downtime. The offline state covers short outages. |
+| Durability | Nightly backups, so at most 24 hours of data can be lost. |
+
+## 15. Requirements Traceability
+
+### 15.1 Functional Areas
+
+| FDD section | Data | API | UI |
+|---|---|---|---|
+| §6.1 Child Profiles | `child` | `/api/parent/children` | Parent → Children, child switcher |
+| §6.2 Routine Management | `routine`, `routine_revision` | `/api/parent/…/routines` | Routine list and editor |
+| §6.3 Task Management | `task`, `revision_task` | Routine save (`PUT`) | Routine editor (dnd-kit) |
+| §6.4 Scheduling | `days_mask`, `routine_skip` | Routine save, skips | Editor, history day view |
+| §6.5 Daily Chart | Read model over revisions | `/days/{date}` | Daily Chart |
+| §6.6 Completing Tasks | `task_completion` | `PUT` / `DELETE …/tasks/{id}` | Task tiles |
+| §6.7 Earning Stickers | `sticker`, `sticker_pick_choice` | Completion response, `/pick` | Celebration, Sticker Pick, Sticker Book |
+| §6.8 Modes and PIN | `family_settings`, `parent_session`, `pin_reset_log` | `/api/parent/pin`, `/api/parent/session` | PIN pad, route guard, idle timer |
+| §6.9 History | Revisions, completions, stickers | `/history` | Calendar |
+| §6.10 Sticker Library | `sticker_design`, `sticker_category` | `/api/parent/library` | Library page |
+| §6.11 Prize Requests | `prize_request`, `prize_request_item` | Prize Request endpoints | Get a Prize, Prize Requests page |
+
+### 15.2 Business Rules
+
+| Rule | Enforced by |
+|---|---|
+| BR-1 | `task_completion` keyed by (task, date), with child and routine columns |
+| BR-2 | `RevisionPolicy`: an edit applies from today, or from tomorrow if today's sticker exists (§6.4) |
+| BR-3 | Routines are soft-deleted through revisions. Stickers keep a snapshot of the routine name and icon. |
+| BR-4 | A Child Mode write for a past date → `409 DAY_CHANGED` |
+| BR-5 | Any write for a future date → `422 FUTURE_DATE` |
+| BR-6 | Choices saved in `sticker_pick_choice` when the sticker is earned. `GET …/pick` only reads them. |
+| BR-7 | `UNIQUE (routine_id, chart_date)` on `sticker`, plus the child lock |
+| BR-8 | Choices point at live design rows. The claim doesn't check design status. |
+| BR-9 | Designs are retired through `status`. Sticker Books point at the live design row. Deletion is `RESTRICT`. |
+| BR-10 | A sticker must be `AVAILABLE` to join a request, checked under the child lock |
+| BR-11 | No `PENDING` request may exist for the child, checked under the child lock, for both child- and parent-created requests |
+| BR-12 | No value column anywhere. Counts are `COUNT(*)`. |
+| BR-13 | The request's child must match every sticker's child |
+| BR-14 | `child` → `prize_request` cascades. Retiring a design never touches requests. |
+| BR-15 | Foreign keys from `sticker` and `sticker_pick_choice` to `sticker_design` are `RESTRICT` → `409 DESIGN_IN_USE` |
+
+### 15.3 Priorities
+
+- **Must:** all built in v1.
+- **Should:** fully designed in this document, and built in v1 if time allows (§18).
+- **Could:** room is left for them, but they aren't built. FR-1.4 uses `child.archived_at`. FR-3.6 uses `revision_task.days_mask`. FR-7.12 uses `sticker.source = BONUS` with no routine. FR-11.14 uses the `REVERSED` status. FR-2.7 templates are static frontend data. FR-5.7 and FR-9.3 only read existing data.
+
+## 16. Interpretations of the FDD
+
+The FDD doesn't settle these points. This design makes the following choices.
+
+| # | Topic | Interpretation | FDD |
+|---|---|---|---|
+| I-1 | Whose "local midnight" | The family's time zone, stored on the server. It's taken from the device when the PIN is first set and can be changed in Settings. All devices share one "today". | FR-4.4 |
+| I-2 | Unclaimed stickers from earlier days | The "Pick your sticker!" button sits on the routine card, but Child Mode only shows today. Unclaimed stickers from earlier days (including ones earned by a parent's past-day fix) appear in a **"Stickers to pick"** tray on the Daily Chart. | FR-7.10, FR-6.5 |
+| I-3 | An edit that finishes a routine | If a parent removes the only unfinished tasks from today's routine, every remaining task is done, so the routine earns its sticker. | FR-7.1, BR-2 |
+| I-4 | Deleting a design that's waiting in a pick | Not allowed, only retiring. Otherwise a saved pick would change. | FR-10.6, BR-6, BR-8 |
+| I-5 | Skipped routines in Child Mode | Hidden from the child's Daily Chart. Shown as Skipped in history. | FR-4.5 |
+| I-6 | Routine order on past days | Order isn't versioned. Past days are shown in the current order. | FR-2.4, FR-4.3 |
+| I-7 | PIN lockout scope and length | Shared by all devices. Cooldowns grow with repeated lockouts: 1, 5, 15, then 60 minutes. | FR-8.7 |
+| I-8 | Parent Mode inactivity period | 5 minutes by default, adjustable in Settings. | FR-8.4 |
+| I-9 | Renamed routines in the Sticker Book | The routine name and icon are saved with the sticker when it's earned, so renaming a routine doesn't rewrite history. Design name and image changes *do* show everywhere, as FR-10.4 requires. | FR-7.5, FR-10.4 |
+| I-10 | "Total earned" | Counts picked stickers (Available + Pending + Used). Unclaimed stickers are shown separately. | FR-7.6 |
+| I-11 | Past days in Child Mode | The API lets anyone read past days, but writing to them needs Parent Mode. The child's screens only show today. | BR-4 |
+| I-12 | Opening Parent Mode | Suggestion: press and hold the Parent button for 1 s to open the PIN pad, so toddler taps don't keep locking everyone out. | FR-8.3, FR-8.7 |
+| I-13 | Fallback sticker | A built-in "Gold Star", hidden from the library, that can't be edited, retired, or deleted. | FR-7.11, FR-10.1 |
+| I-14 | Routine with no days selected | Not allowed. Use Pause instead. | FR-4.1, FR-2.6 |
+| I-15 | Which days can be skipped | Any day (past, today, or future) on which the routine hasn't earned a sticker. | FR-4.5 |
+
+## 17. Open Questions
+
+| # | Question | Default if unanswered |
+|---|---|---|
+| OQ-1 | Ingress option A (LAN + cert-manager) or B (Tailscale), and the permanent hostname | None: this has to be decided before the first install, because the PWA is tied to its origin. |
+| OQ-2 | An existing MySQL server, or the optional in-cluster StatefulSet? | Existing server |
+| OQ-3 | Container registry and CI system | GitHub Actions pushing to GHCR |
+| OQ-4 | Is Fluent Emoji 3D the right look for stickers and icons? | Yes |
+| OQ-5 | Confirm I-2 (the "Stickers to pick" tray) and I-3 (an edit can finish a routine). | As written |
+
+## 18. Implementation Plan
+
+| Milestone | Scope | Done when |
+|---|---|---|
+| **M0** Walking skeleton | Repository, Gradle + Vite, both dev modes (`bootTestRun`, `dev:mock`), Dockerfile, compose, CI, Kustomize base, health probes, an installable empty PWA | `./gradlew bootTestRun` works with nothing installed but a container runtime, and the empty PWA installs on the child's tablet over HTTPS from the cluster |
+| **M1** Setup and library | Schema, PIN setup and unlock, sessions, idle timeout and lockout (FR-8.4, FR-8.7), the reset procedure and log (FR-8.10), child profiles, artwork pipeline, Sticker Library | A parent can set a PIN, add children, and manage stickers |
+| **M2** Routines and chart | Routine editor with revisions, schedules, ordering, reading the Daily Chart | Charts show the right routines for each weekday, and edits follow BR-2 |
+| **M3** Earning | Task completion, celebrations, Sticker Pick, Sticker Book | The full earning flow works on a tablet, and the concurrency tests pass |
+| **M4** Spending | Get a Prize, the Prize Requests page and its history | The full spending flow works, and the BR-10 and BR-11 tests pass |
+| **M5** History and hardening | Calendar, offline state, update flow, accessibility pass, end-to-end suite, runbooks | Every Must is done, and end-to-end tests pass on iPad and phone profiles |
+| **M6** Remaining Shoulds | FR-2.5, FR-2.6, FR-4.5, FR-5.6, FR-6.4, FR-6.5, FR-9.2, FR-10.8, FR-10.9, FR-11.6, FR-11.11–11.13, FR-11.17, FR-11.18 | All tested |
