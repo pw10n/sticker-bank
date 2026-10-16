@@ -1,0 +1,72 @@
+# Default deny for every pod in the namespace, then explicit allows for the app.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sticker-bank-app
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sticker-bank
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Only the ingress controller may reach the app, and only on 8080.
+    # PLACEHOLDER: the label below must match the namespace of YOUR ingress controller
+    # (e.g. Traefik in "kube-system" or "traefik"; Tailscale operator in "tailscale").
+    # kubernetes.io/metadata.name is set automatically on every namespace.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: REPLACE_WITH_INGRESS_CONTROLLER_NAMESPACE
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # MySQL (in-cluster optional StatefulSet, same namespace). For a BYO server,
+    # replace this with an ipBlock/namespace rule for that server on 3306.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sticker-bank-mysql
+      ports:
+        - protocol: TCP
+          port: 3306
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# MySQL pods: accept connections only from the app (and the backup job); no egress needed.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sticker-bank-mysql
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sticker-bank-mysql
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sticker-bank
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sticker-bank-backup
+      ports:
+        - protocol: TCP
+          port: 3306

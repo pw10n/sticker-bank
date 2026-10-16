@@ -1,0 +1,16 @@
+# Keep the hostname forever: it is the PWA origin, and changing it loses the
+# installed app and its local data on every device.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: sticker-bank
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`stickers.home.example.com`)
+      kind: Rule
+      services:
+        - name: sticker-bank
+          port: http
+  tls: {} # add `secretName: <tls-secret>` or `certResolver: <name>` for a real cert

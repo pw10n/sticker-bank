@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sticker-bank
+  labels:
+    app.kubernetes.io/name: sticker-bank
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sticker-bank
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+# The management port (8081) is deliberately not exposed through the Service.

@@ -1,0 +1,16 @@
+# Option B: private HTTPS on your tailnet via the Tailscale Kubernetes operator.
+# The resulting URL is https://sticker-bank.<tailnet>.ts.net
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sticker-bank
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - sticker-bank
+  defaultBackend:
+    service:
+      name: sticker-bank
+      port:
+        name: http

@@ -1,0 +1,25 @@
+# Option A: LAN access through Traefik with a cert-manager certificate.
+# Replace the host with your own name; it must resolve on your LAN/VPN only.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sticker-bank
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - stickers.home.example.com
+      secretName: sticker-bank-tls
+  rules:
+    - host: stickers.home.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sticker-bank
+                port:
+                  name: http

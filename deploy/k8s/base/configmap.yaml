@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sticker-bank-config
+data:
+  # Points at the optional in-cluster MySQL Service (deploy/k8s/optional/mysql).
+  # If you bring your own MySQL 8.4 server, change host/port/database here
+  # (and update the NetworkPolicy egress rule to match).
+  SPRING_DATASOURCE_URL: "jdbc:mysql://sticker-bank-mysql:3306/sticker_bank?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true"
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60"

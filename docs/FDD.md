@@ -4,8 +4,8 @@
 |---|---|
 | **Product** | Sticker Bank: a sticker / reward chart for young children |
 | **Document** | Functional Design Document |
-| **Version** | 1.0 |
-| **Status** | Approved |
+| **Version** | 1.1 |
+| **Status** | Draft |
 | **Date** | 2026-10-15 |
 
 > **Scope note:** This document covers **functional** behavior only. Technology choices, architecture, data storage, and APIs are covered in a separate technical design document.
@@ -22,6 +22,7 @@
 | 0.6 | 2026-10-15 | One shared Sticker Library. One pending Prize Request per child. Admin-only PIN reset. |
 | 0.7 | 2026-10-15 | One deployment serves one family. |
 | 1.0 | 2026-10-15 | Approved. |
+| 1.1 | 2026-10-15 | Parent can revoke an earned sticker by unchecking a task in Parent Mode. The sticker is un-earned until the routine is finished again. Replaces "stickers never un-earned" (D-2). |
 
 ---
 
@@ -33,7 +34,7 @@ Sticker Bank is a reward chart app for young children. Parents set up **routines
 
 | Role | Description | Typical actions |
 |---|---|---|
-| **Parent** | Sets up and runs the app day to day. | Manage children, routines, tasks, schedules, and the Sticker Library. Complete Prize Requests. Review history. Fix mistakes. |
+| **Parent** | Sets up and runs the app day to day. | Manage children, routines, tasks, schedules, and the Sticker Library. Complete Prize Requests. Review history and earned stickers. Revoke a sticker if a task wasn't really done. Fix mistakes. |
 | **Child** | Toddler or young child, usually guided by a parent. | Taps tasks to mark them done. Picks a sticker when a routine is finished. Looks at their Sticker Book. Picks stickers to spend on a prize. |
 | **Admin** | Runs the deployment (usually a parent with technical access). Not a day-to-day user. | Resets the family's PIN when it's forgotten. |
 
@@ -60,6 +61,7 @@ Sticker Bank is a reward chart app for young children. Parents set up **routines
 | **Sticker Pick** | The moment a child chooses 1 of 3 randomly offered stickers after finishing a routine. |
 | **Sticker Book** | The child's collection of every sticker earned, including spent ones. |
 | **Sticker status** | Each earned sticker is **Available** (can be spent), **Pending** (part of an open Prize Request), or **Used** (spent on a prize). |
+| **Revoke** | A parent action (Parent Mode only) that unchecks a completed task in a routine that already earned its sticker. The sticker is removed (un-earned) until every task in the routine is done again. |
 | **Prize Request** | A record started by the child (or by the parent for the child), listing the stickers to spend. The parent completes it by writing down the prize given, or cancels it. |
 
 ## 5. Key User Flows
@@ -89,9 +91,21 @@ stateDiagram-v2
     Pending --> Used: Parent completes request (records prize)
     Pending --> Available: Request cancelled
     Used --> Available: Parent reverses request (Could, FR-11.14)
+    Available --> [*]: Parent revokes (FR-12.3)
+    Pending --> [*]: Parent revokes, sticker leaves the request (FR-12.6)
 ```
 
-### 5.4 Forgotten PIN
+A revoked sticker is removed from the Sticker Book. Used stickers can't be revoked (FR-12.7).
+
+### 5.4 Revoking a Sticker
+
+1. The parent enters Parent Mode (PIN) and opens the child's Daily Chart for today, or a past day from History.
+2. The parent taps a completed task in a routine that earned a sticker (e.g. "Brush teeth" wasn't actually done).
+3. The app asks the parent to confirm, showing the sticker that will be removed.
+4. On confirm, the task is unchecked, the sticker is removed from the Sticker Book, and the routine is no longer finished.
+5. The child does the task and taps it again (today), or the parent re-checks it (past day). When every task is done, the routine earns a sticker again and a new **Sticker Pick** opens.
+
+### 5.5 Forgotten PIN
 
 1. The parent can't enter Parent Mode and contacts the Admin.
 2. The Admin resets the PIN, which clears it.
@@ -162,10 +176,10 @@ Priority: **M** = Must (v1 / MVP), **S** = Should (v1 if time allows), **C** = C
 | ID | Requirement | Pri |
 |---|---|---|
 | FR-6.1 | Tapping a task marks it done for today. Completed tasks look clearly different (e.g. checkmark, color fill). | M |
-| FR-6.2 | Tapping a completed task undoes it, **until the routine earns its sticker**. After that, the routine is locked as finished for the rest of the day (see FR-7.4). | M |
+| FR-6.2 | Tapping a completed task undoes it, **until the routine earns its sticker**. After that, the routine is locked as finished in Child Mode for the rest of the day (see FR-7.4). Only a parent can unlock it, by revoking the sticker (§6.12). | M |
 | FR-6.3 | Tasks can be completed in any order. | M |
 | FR-6.4 | Completing a task gives a small celebration (animation and/or sound). | S |
-| FR-6.5 | In Parent Mode, the parent can mark tasks done for **past days** (e.g. forgot to tap yesterday). Finishing a past routine this way earns its sticker. Routines that already earned a sticker can't be unchecked. | S |
+| FR-6.5 | In Parent Mode, the parent can mark tasks done for **past days** (e.g. forgot to tap yesterday). Finishing a past routine this way earns its sticker. Unchecking a task in a routine that already earned a sticker is a revoke (§6.12). | S |
 
 ### 6.7 Earning Stickers
 
@@ -174,7 +188,7 @@ Priority: **M** = Must (v1 / MVP), **S** = Should (v1 if time allows), **C** = C
 | FR-7.1 | When **every** task in a routine is done for the day, the child earns **one sticker** for that routine and day. There is no partial credit: skipping or missing any task means no sticker. | M |
 | FR-7.2 | Earning a sticker triggers a bigger celebration (e.g. full-screen reveal, confetti, sound). | M |
 | FR-7.3 | A routine can earn **at most one** sticker per day. | M |
-| FR-7.4 | Earned stickers are **never taken back**. Once a routine earns its sticker, its tasks are locked as done for that day and can't be unchecked. | M |
+| FR-7.4 | Once a routine earns its sticker, its tasks are locked as done for that day **in Child Mode**. The child can't uncheck them. Only a parent can take the sticker back, by revoking it in Parent Mode (§6.12). | M |
 | FR-7.5 | Each child has a **Sticker Book** showing every sticker earned, grouped by date. Each entry shows the sticker and the routine and date it was earned for. | M |
 | FR-7.6 | The Sticker Book shows counts for **Available**, **Pending**, and **Used** stickers, plus total earned. | M |
 | FR-7.7 | **Sticker Pick:** after the celebration, the child is shown **3 different stickers, picked at random** from the active stickers in the Sticker Library. Duplicates of stickers the child already has are allowed. | M |
@@ -189,7 +203,7 @@ Priority: **M** = Must (v1 / MVP), **S** = Should (v1 if time allows), **C** = C
 | ID | Requirement | Pri |
 |---|---|---|
 | FR-8.1 | By default the app opens in **Child Mode**: Daily Chart, marking tasks, the Sticker Book, and the **Get a Prize** screen only. | M |
-| FR-8.2 | Setup and management screens (children, routines, tasks, schedules, Sticker Library, Prize Requests, settings) require **Parent Mode**. | M |
+| FR-8.2 | Setup and management screens (children, routines, tasks, schedules, Sticker Library, Prize Requests, sticker review and revocation, settings) require **Parent Mode**. | M |
 | FR-8.3 | Entering Parent Mode requires the **parent PIN** (4 digits). | M |
 | FR-8.4 | Parent Mode turns itself off after a period of inactivity or when the parent exits it. | S |
 | FR-8.5 | On first launch, the parent must create a PIN (entered twice to confirm) before setting anything else up. | M |
@@ -203,7 +217,7 @@ Priority: **M** = Must (v1 / MVP), **S** = Should (v1 if time allows), **C** = C
 
 | ID | Requirement | Pri |
 |---|---|---|
-| FR-9.1 | Parent can see a calendar or weekly view of each child's earned, incomplete, and skipped routines. | M |
+| FR-9.1 | Parent can see a calendar or weekly view of each child's earned, incomplete, and skipped routines. Routines whose sticker was revoked and not yet re-earned show as incomplete. | M |
 | FR-9.2 | Parent can open any past day to see which tasks were done. | S |
 | FR-9.3 | The app shows simple trends (e.g. "Morning Routine finished 4 of 5 school days this week"). | C |
 
@@ -259,6 +273,24 @@ Prizes are **not** set up in the app. The app only records which stickers were s
 | FR-11.17 | Tapping a Used sticker shows the prize it went toward and the date. | S |
 | FR-11.18 | The Sticker Book can filter to show only Available stickers. | S |
 
+### 6.12 Sticker Review & Revocation (Parent)
+
+A parent can take back a sticker if the child didn't really finish a task. Revoking is done by unchecking the task, not by deleting the sticker directly.
+
+| ID | Requirement | Pri |
+|---|---|---|
+| FR-12.1 | In Parent Mode, the parent can **review** each earned sticker: which routine and date it was earned for, which tasks were checked, and its current status (Unclaimed, Available, Pending, or Used). | M |
+| FR-12.2 | In Parent Mode, the parent can **uncheck** a completed task in a routine that already earned its sticker, for today or a past day. This is the only way to revoke a sticker. | M |
+| FR-12.3 | Before revoking, the app asks for confirmation and shows the sticker that will be removed and the task being unchecked. On confirm, the task is unchecked and the sticker is **un-earned**: it is removed from the Sticker Book and no longer counts toward any total. | M |
+| FR-12.4 | After a revoke, the routine is **no longer finished** for that day. It unlocks and shows its normal progress (e.g. "3 of 4 done"). Other tasks stay checked. | M |
+| FR-12.5 | The sticker can be **earned again** for that routine and day once every task is done again: by the child in Child Mode (today only) or by the parent in Parent Mode (today or a past day, FR-6.5). Re-earning opens a new Sticker Pick with **new random choices**. | M |
+| FR-12.6 | If the sticker is **Pending** in a Prize Request, the confirmation says so. Revoking removes it from that request. If the request is left with no stickers, it is cancelled automatically. | M |
+| FR-12.7 | A **Used** sticker can't be revoked, because the prize was already given. The app explains this. (If request reversal, FR-11.14, is available, the parent can reverse the request first and then revoke.) | M |
+| FR-12.8 | If the sticker is still **unclaimed** (Sticker Pick not yet made), revoking discards its saved choices and removes the "Pick your sticker!" button. | M |
+| FR-12.9 | Each revoke is recorded in the child's history with the date/time, routine, day, task unchecked, and the sticker removed. | S |
+| FR-12.10 | Revoking happens quietly. There is no celebration or sound in reverse, and Child Mode shows no message beyond the routine no longer being finished. | S |
+| FR-12.11 | Parent can add an optional short note when revoking (e.g. "Teeth not actually brushed"). The note appears in history. | C |
+
 ## 7. Business Rules
 
 | ID | Rule |
@@ -268,8 +300,8 @@ Prizes are **not** set up in the app. The app only records which stickers were s
 | BR-3 | Deleting a task or routine never deletes stickers already earned. |
 | BR-4 | Past days are read-only in Child Mode. |
 | BR-5 | Tasks can't be completed for future days. |
-| BR-6 | The 3 Sticker Pick choices are generated once, when the routine is finished, and saved. Closing and reopening never produces new choices. |
-| BR-7 | **No double earning:** each child × routine × date can earn at most one sticker, however it's completed (by the child, or by the parent fixing a past day). |
+| BR-6 | The 3 Sticker Pick choices are generated once, when the routine is finished, and saved. Closing and reopening never produces new choices. A revoke (§6.12) discards them, and re-finishing the routine generates new ones. |
+| BR-7 | **No double earning:** each child × routine × date can hold at most one earned sticker at a time, however it's completed (by the child, or by the parent fixing a past day). After a revoke, it can be earned again, but never more than one at once. |
 | BR-8 | If a sticker is retired or edited while it's waiting as an unclaimed choice, it is still shown with its latest image and name, and can still be picked. |
 | BR-9 | Retiring or editing stickers never removes anything from a child's Sticker Book. |
 | BR-10 | A sticker can be in only **one** open Prize Request at a time. Pending and Used stickers can't be selected again. |
@@ -278,6 +310,8 @@ Prizes are **not** set up in the app. The app only records which stickers were s
 | BR-13 | Prize Requests are tracked per child. Siblings can't spend each other's stickers. |
 | BR-14 | Deleting a child deletes their Prize Requests. Retiring a sticker design doesn't affect Prize Requests that include it. |
 | BR-15 | A sticker design can't be deleted from the library if any child has earned it, whatever its status. |
+| BR-16 | Only a parent can revoke a sticker, and only by unchecking a task in Parent Mode. Child Mode can never uncheck a task in a routine that earned its sticker. |
+| BR-17 | A revoked sticker is fully un-earned: it leaves the Sticker Book, the Available/Pending/Used/total counts, and any Pending Prize Request. Used stickers can't be revoked. |
 
 ## 8. Out of Scope (v1)
 
@@ -297,7 +331,7 @@ Prizes are **not** set up in the app. The app only records which stickers were s
 | # | Topic | Decision | Reference |
 |---|---|---|---|
 | D-1 | Partial credit | None. Every task in a routine must be done to earn the sticker. | FR-7.1 |
-| D-2 | Un-earning stickers | Earned stickers are never taken back, and a routine can't earn twice in a day. A routine locks once it earns its sticker. | FR-7.4, BR-2, BR-7 |
+| D-2 | Un-earning stickers | *(Revised v1.1)* A routine locks in Child Mode once it earns its sticker. A parent can revoke the sticker by unchecking a task in Parent Mode. It is un-earned until the routine is finished again. Used stickers can't be revoked. At most one sticker per routine per day at a time. | FR-7.4, §6.12, BR-7, BR-16, BR-17 |
 | D-3 | Routine ownership | Routines are per child. They can be copied but not shared. | FR-2.5 |
 | D-4 | Standalone tasks | Not supported. Every task belongs to a routine. | FR-3.1 |
 | D-5 | Sticker selection | Child picks 1 of 3 random stickers. Unclaimed picks keep the same choices. | FR-7.7 to FR-7.10, BR-6 |

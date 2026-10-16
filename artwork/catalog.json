@@ -1,0 +1,1364 @@
+[
+  {
+    "key": "whale",
+    "name": "Happy Whale",
+    "emoji": "🐳",
+    "tags": [
+      "sea",
+      "ocean"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f433.webp"
+  },
+  {
+    "key": "lion",
+    "name": "Lion",
+    "emoji": "🦁",
+    "tags": [
+      "zoo",
+      "cat"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f981.webp"
+  },
+  {
+    "key": "panda",
+    "name": "Panda",
+    "emoji": "🐼",
+    "tags": [
+      "bear",
+      "zoo"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f43c.webp"
+  },
+  {
+    "key": "unicorn",
+    "name": "Unicorn",
+    "emoji": "🦄",
+    "tags": [
+      "magic",
+      "horse"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f984.webp"
+  },
+  {
+    "key": "t-rex",
+    "name": "T-Rex",
+    "emoji": "🦖",
+    "tags": [
+      "dinosaur"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f996.webp"
+  },
+  {
+    "key": "octopus",
+    "name": "Octopus",
+    "emoji": "🐙",
+    "tags": [
+      "sea",
+      "ocean"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f419.webp"
+  },
+  {
+    "key": "dog-face",
+    "name": "Dog",
+    "emoji": "🐶",
+    "tags": [
+      "pet"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f436.webp"
+  },
+  {
+    "key": "cat-face",
+    "name": "Cat",
+    "emoji": "🐱",
+    "tags": [
+      "pet"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f431.webp"
+  },
+  {
+    "key": "fox",
+    "name": "Fox",
+    "emoji": "🦊",
+    "tags": [
+      "forest"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f98a.webp"
+  },
+  {
+    "key": "frog",
+    "name": "Frog",
+    "emoji": "🐸",
+    "tags": [
+      "pond"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f438.webp"
+  },
+  {
+    "key": "owl",
+    "name": "Owl",
+    "emoji": "🦉",
+    "tags": [
+      "bird",
+      "night"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f989.webp"
+  },
+  {
+    "key": "penguin",
+    "name": "Penguin",
+    "emoji": "🐧",
+    "tags": [
+      "bird",
+      "ice"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f427.webp"
+  },
+  {
+    "key": "butterfly",
+    "name": "Butterfly",
+    "emoji": "🦋",
+    "tags": [
+      "insect"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f98b.webp"
+  },
+  {
+    "key": "dolphin",
+    "name": "Dolphin",
+    "emoji": "🐬",
+    "tags": [
+      "sea"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f42c.webp"
+  },
+  {
+    "key": "turtle",
+    "name": "Turtle",
+    "emoji": "🐢",
+    "tags": [
+      "sea",
+      "pond"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f422.webp"
+  },
+  {
+    "key": "rabbit-face",
+    "name": "Rabbit",
+    "emoji": "🐰",
+    "tags": [
+      "pet"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f430.webp"
+  },
+  {
+    "key": "bear",
+    "name": "Bear",
+    "emoji": "🐻",
+    "tags": [
+      "forest"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f43b.webp"
+  },
+  {
+    "key": "koala",
+    "name": "Koala",
+    "emoji": "🐨",
+    "tags": [
+      "australia"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f428.webp"
+  },
+  {
+    "key": "tiger-face",
+    "name": "Tiger",
+    "emoji": "🐯",
+    "tags": [
+      "zoo",
+      "cat"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f42f.webp"
+  },
+  {
+    "key": "monkey-face",
+    "name": "Monkey",
+    "emoji": "🐵",
+    "tags": [
+      "zoo"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f435.webp"
+  },
+  {
+    "key": "hamster",
+    "name": "Hamster",
+    "emoji": "🐹",
+    "tags": [
+      "pet"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f439.webp"
+  },
+  {
+    "key": "hatching-chick",
+    "name": "Hatching Chick",
+    "emoji": "🐣",
+    "tags": [
+      "bird",
+      "egg"
+    ],
+    "uses": [
+      "sticker",
+      "avatar"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f423.webp"
+  },
+  {
+    "key": "elephant",
+    "name": "Elephant",
+    "emoji": "🐘",
+    "tags": [
+      "zoo"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f418.webp"
+  },
+  {
+    "key": "giraffe",
+    "name": "Giraffe",
+    "emoji": "🦒",
+    "tags": [
+      "zoo"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f992.webp"
+  },
+  {
+    "key": "ladybug",
+    "name": "Ladybug",
+    "emoji": "🐞",
+    "tags": [
+      "insect"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f41e.webp"
+  },
+  {
+    "key": "bee",
+    "name": "Bee",
+    "emoji": "🐝",
+    "tags": [
+      "insect"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f41d.webp"
+  },
+  {
+    "key": "shark",
+    "name": "Shark",
+    "emoji": "🦈",
+    "tags": [
+      "sea"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Animals",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f988.webp"
+  },
+  {
+    "key": "rocket",
+    "name": "Rocket",
+    "emoji": "🚀",
+    "tags": [
+      "space"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Space",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f680.webp"
+  },
+  {
+    "key": "ringed-planet",
+    "name": "Ringed Planet",
+    "emoji": "🪐",
+    "tags": [
+      "planet"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Space",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1fa90.webp"
+  },
+  {
+    "key": "shooting-star",
+    "name": "Shooting Star",
+    "emoji": "🌠",
+    "tags": [
+      "night"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Space",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f320.webp"
+  },
+  {
+    "key": "alien",
+    "name": "Alien",
+    "emoji": "👽",
+    "tags": [
+      "ufo"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Space",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f47d.webp"
+  },
+  {
+    "key": "crescent-moon",
+    "name": "Crescent Moon",
+    "emoji": "🌙",
+    "tags": [
+      "night",
+      "sleep"
+    ],
+    "uses": [
+      "sticker",
+      "routine"
+    ],
+    "category": "Space",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f319.webp"
+  },
+  {
+    "key": "flying-saucer",
+    "name": "Flying Saucer",
+    "emoji": "🛸",
+    "tags": [
+      "ufo"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Space",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f6f8.webp"
+  },
+  {
+    "key": "glowing-star",
+    "name": "Glowing Star",
+    "emoji": "🌟",
+    "tags": [
+      "gold",
+      "star"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Space",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f31f.webp"
+  },
+  {
+    "key": "star",
+    "name": "Star",
+    "emoji": "⭐",
+    "tags": [
+      "gold"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Space",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/2b50.webp"
+  },
+  {
+    "key": "comet",
+    "name": "Comet",
+    "emoji": "☄️",
+    "tags": [
+      "space"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Space",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/2604-fe0f.webp"
+  },
+  {
+    "key": "earth-globe-americas",
+    "name": "Earth",
+    "emoji": "🌍",
+    "tags": [
+      "planet"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Space",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f30d.webp"
+  },
+  {
+    "key": "rainbow",
+    "name": "Rainbow",
+    "emoji": "🌈",
+    "tags": [
+      "sky"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f308.webp"
+  },
+  {
+    "key": "taco",
+    "name": "Taco",
+    "emoji": "🌮",
+    "tags": [
+      "dinner"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f32e.webp"
+  },
+  {
+    "key": "pizza",
+    "name": "Pizza",
+    "emoji": "🍕",
+    "tags": [
+      "dinner"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f355.webp"
+  },
+  {
+    "key": "ice-cream",
+    "name": "Ice Cream",
+    "emoji": "🍨",
+    "tags": [
+      "dessert"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f368.webp"
+  },
+  {
+    "key": "strawberry",
+    "name": "Strawberry",
+    "emoji": "🍓",
+    "tags": [
+      "fruit"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f353.webp"
+  },
+  {
+    "key": "doughnut",
+    "name": "Doughnut",
+    "emoji": "🍩",
+    "tags": [
+      "dessert"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f369.webp"
+  },
+  {
+    "key": "watermelon",
+    "name": "Watermelon",
+    "emoji": "🍉",
+    "tags": [
+      "fruit"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f349.webp"
+  },
+  {
+    "key": "cupcake",
+    "name": "Cupcake",
+    "emoji": "🧁",
+    "tags": [
+      "dessert"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f9c1.webp"
+  },
+  {
+    "key": "cookie",
+    "name": "Cookie",
+    "emoji": "🍪",
+    "tags": [
+      "dessert"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f36a.webp"
+  },
+  {
+    "key": "banana",
+    "name": "Banana",
+    "emoji": "🍌",
+    "tags": [
+      "fruit"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f34c.webp"
+  },
+  {
+    "key": "popcorn",
+    "name": "Popcorn",
+    "emoji": "🍿",
+    "tags": [
+      "snack"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f37f.webp"
+  },
+  {
+    "key": "pancakes",
+    "name": "Pancakes",
+    "emoji": "🥞",
+    "tags": [
+      "breakfast"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f95e.webp"
+  },
+  {
+    "key": "cherries",
+    "name": "Cherries",
+    "emoji": "🍒",
+    "tags": [
+      "fruit"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f352.webp"
+  },
+  {
+    "key": "red-apple",
+    "name": "Red Apple",
+    "emoji": "🍎",
+    "tags": [
+      "fruit",
+      "snack"
+    ],
+    "uses": [
+      "sticker",
+      "task"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f34e.webp"
+  },
+  {
+    "key": "bowl-with-spoon",
+    "name": "Bowl with Spoon",
+    "emoji": "🥣",
+    "tags": [
+      "breakfast"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f963.webp"
+  },
+  {
+    "key": "cup-with-straw",
+    "name": "Cup with Straw",
+    "emoji": "🥤",
+    "tags": [
+      "drink"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": "Food",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f964.webp"
+  },
+  {
+    "key": "racing-car",
+    "name": "Race Car",
+    "emoji": "🏎️",
+    "tags": [
+      "fast"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Vehicles",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f3ce-fe0f.webp"
+  },
+  {
+    "key": "fire-engine",
+    "name": "Fire Engine",
+    "emoji": "🚒",
+    "tags": [
+      "truck"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Vehicles",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f692.webp"
+  },
+  {
+    "key": "helicopter",
+    "name": "Helicopter",
+    "emoji": "🚁",
+    "tags": [
+      "air"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Vehicles",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f681.webp"
+  },
+  {
+    "key": "sailboat",
+    "name": "Sailboat",
+    "emoji": "⛵",
+    "tags": [
+      "sea"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Vehicles",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/26f5.webp"
+  },
+  {
+    "key": "tractor",
+    "name": "Tractor",
+    "emoji": "🚜",
+    "tags": [
+      "farm"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Vehicles",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f69c.webp"
+  },
+  {
+    "key": "locomotive",
+    "name": "Steam Train",
+    "emoji": "🚂",
+    "tags": [
+      "train"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Vehicles",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f682.webp"
+  },
+  {
+    "key": "airplane",
+    "name": "Airplane",
+    "emoji": "✈️",
+    "tags": [
+      "air"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Vehicles",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/2708-fe0f.webp"
+  },
+  {
+    "key": "bus",
+    "name": "Bus",
+    "emoji": "🚌",
+    "tags": [
+      "road"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Vehicles",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f68c.webp"
+  },
+  {
+    "key": "bicycle",
+    "name": "Bicycle",
+    "emoji": "🚲",
+    "tags": [
+      "road"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Vehicles",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f6b2.webp"
+  },
+  {
+    "key": "ambulance",
+    "name": "Ambulance",
+    "emoji": "🚑",
+    "tags": [
+      "truck"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Vehicles",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f691.webp"
+  },
+  {
+    "key": "police-car",
+    "name": "Police Car",
+    "emoji": "🚓",
+    "tags": [
+      "road"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Vehicles",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f693.webp"
+  },
+  {
+    "key": "taxi",
+    "name": "Taxi",
+    "emoji": "🚕",
+    "tags": [
+      "road"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": "Vehicles",
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f695.webp"
+  },
+  {
+    "key": "crown",
+    "name": "Crown",
+    "emoji": "👑",
+    "tags": [
+      "royal"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f451.webp"
+  },
+  {
+    "key": "gem-stone",
+    "name": "Gem Stone",
+    "emoji": "💎",
+    "tags": [
+      "treasure"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f48e.webp"
+  },
+  {
+    "key": "balloon",
+    "name": "Balloon",
+    "emoji": "🎈",
+    "tags": [
+      "party"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f388.webp"
+  },
+  {
+    "key": "wrapped-gift",
+    "name": "Wrapped Gift",
+    "emoji": "🎁",
+    "tags": [
+      "party"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f381.webp"
+  },
+  {
+    "key": "trophy",
+    "name": "Trophy",
+    "emoji": "🏆",
+    "tags": [
+      "winner"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f3c6.webp"
+  },
+  {
+    "key": "soccer-ball",
+    "name": "Soccer Ball",
+    "emoji": "⚽",
+    "tags": [
+      "sport"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/26bd.webp"
+  },
+  {
+    "key": "party-popper",
+    "name": "Party Popper",
+    "emoji": "🎉",
+    "tags": [
+      "party"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f389.webp"
+  },
+  {
+    "key": "medal",
+    "name": "Medal",
+    "emoji": "🏅",
+    "tags": [
+      "winner"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f3c5.webp"
+  },
+  {
+    "key": "magic-wand",
+    "name": "Magic Wand",
+    "emoji": "🪄",
+    "tags": [
+      "magic"
+    ],
+    "uses": [
+      "sticker"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1fa84.webp"
+  },
+  {
+    "key": "sparkles",
+    "name": "Sparkles",
+    "emoji": "✨",
+    "tags": [
+      "shine",
+      "clean"
+    ],
+    "uses": [
+      "sticker",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/2728.webp"
+  },
+  {
+    "key": "toothbrush",
+    "name": "Toothbrush",
+    "emoji": "🪥",
+    "tags": [
+      "teeth"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1faa5.webp"
+  },
+  {
+    "key": "t-shirt",
+    "name": "T-Shirt",
+    "emoji": "👕",
+    "tags": [
+      "clothes"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f455.webp"
+  },
+  {
+    "key": "sneaker",
+    "name": "Sneaker",
+    "emoji": "👟",
+    "tags": [
+      "shoes"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f45f.webp"
+  },
+  {
+    "key": "socks",
+    "name": "Socks",
+    "emoji": "🧦",
+    "tags": [
+      "clothes"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f9e6.webp"
+  },
+  {
+    "key": "toilet",
+    "name": "Toilet",
+    "emoji": "🚽",
+    "tags": [
+      "potty"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f6bd.webp"
+  },
+  {
+    "key": "bathtub",
+    "name": "Bathtub",
+    "emoji": "🛁",
+    "tags": [
+      "bath"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f6c1.webp"
+  },
+  {
+    "key": "shower",
+    "name": "Shower",
+    "emoji": "🚿",
+    "tags": [
+      "bath"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f6bf.webp"
+  },
+  {
+    "key": "soap",
+    "name": "Soap",
+    "emoji": "🧼",
+    "tags": [
+      "wash"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f9fc.webp"
+  },
+  {
+    "key": "bed",
+    "name": "Bed",
+    "emoji": "🛏️",
+    "tags": [
+      "sleep"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f6cf-fe0f.webp"
+  },
+  {
+    "key": "open-book",
+    "name": "Open Book",
+    "emoji": "📖",
+    "tags": [
+      "read"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f4d6.webp"
+  },
+  {
+    "key": "backpack",
+    "name": "Backpack",
+    "emoji": "🎒",
+    "tags": [
+      "school"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f392.webp"
+  },
+  {
+    "key": "teddy-bear",
+    "name": "Teddy Bear",
+    "emoji": "🧸",
+    "tags": [
+      "toys"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f9f8.webp"
+  },
+  {
+    "key": "basket",
+    "name": "Basket",
+    "emoji": "🧺",
+    "tags": [
+      "laundry"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f9fa.webp"
+  },
+  {
+    "key": "broom",
+    "name": "Broom",
+    "emoji": "🧹",
+    "tags": [
+      "clean"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f9f9.webp"
+  },
+  {
+    "key": "potted-plant",
+    "name": "Potted Plant",
+    "emoji": "🪴",
+    "tags": [
+      "water"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1fab4.webp"
+  },
+  {
+    "key": "coat",
+    "name": "Coat",
+    "emoji": "🧥",
+    "tags": [
+      "clothes"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f9e5.webp"
+  },
+  {
+    "key": "pencil",
+    "name": "Pencil",
+    "emoji": "✏️",
+    "tags": [
+      "draw"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/270f-fe0f.webp"
+  },
+  {
+    "key": "droplet",
+    "name": "Droplet",
+    "emoji": "💧",
+    "tags": [
+      "water"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f4a7.webp"
+  },
+  {
+    "key": "alarm-clock",
+    "name": "Alarm Clock",
+    "emoji": "⏰",
+    "tags": [
+      "time"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/23f0.webp"
+  },
+  {
+    "key": "billed-cap",
+    "name": "Billed Cap",
+    "emoji": "🧢",
+    "tags": [
+      "clothes"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f9e2.webp"
+  },
+  {
+    "key": "glasses",
+    "name": "Glasses",
+    "emoji": "👓",
+    "tags": [
+      "clothes"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f453.webp"
+  },
+  {
+    "key": "sponge",
+    "name": "Sponge",
+    "emoji": "🧽",
+    "tags": [
+      "clean"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f9fd.webp"
+  },
+  {
+    "key": "bone",
+    "name": "Bone",
+    "emoji": "🦴",
+    "tags": [
+      "pet"
+    ],
+    "uses": [
+      "task"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f9b4.webp"
+  },
+  {
+    "key": "sun",
+    "name": "Sun",
+    "emoji": "☀️",
+    "tags": [
+      "morning"
+    ],
+    "uses": [
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/2600-fe0f.webp"
+  },
+  {
+    "key": "sunrise",
+    "name": "Sunrise",
+    "emoji": "🌅",
+    "tags": [
+      "morning"
+    ],
+    "uses": [
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f305.webp"
+  },
+  {
+    "key": "house",
+    "name": "House",
+    "emoji": "🏠",
+    "tags": [
+      "home"
+    ],
+    "uses": [
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f3e0.webp"
+  },
+  {
+    "key": "school",
+    "name": "School",
+    "emoji": "🏫",
+    "tags": [
+      "school"
+    ],
+    "uses": [
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f3eb.webp"
+  }
+]

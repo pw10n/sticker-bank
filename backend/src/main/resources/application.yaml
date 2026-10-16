@@ -1,0 +1,32 @@
+spring:
+  application.name: sticker-bank
+  datasource:
+    hikari:
+      maximum-pool-size: 8
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+  flyway.enabled: true
+  jackson.time-zone: UTC
+  mvc.problemdetails.enabled: true
+server:
+  port: 8080
+  shutdown: graceful
+  forward-headers-strategy: framework
+  compression.enabled: true
+management:
+  server.port: 8081
+  endpoints.web.exposure.include: health,info
+  endpoint.health:
+    probes.enabled: true
+    group.readiness.include: readinessState,db
+logging.structured.format.console: ecs
+springdoc:
+  api-docs:
+    path: /api/openapi.json
+    version: openapi_3_1
+sticker-bank:
+  parent-session:
+    absolute-max: 12h
+    cookie-secure: ${STICKER_BANK_COOKIE_SECURE:true}
+  pin:
+    attempts-before-lockout: 5
+    cooldowns: [1m, 5m, 15m, 60m]

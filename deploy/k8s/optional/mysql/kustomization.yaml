@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: sticker-bank
+resources:
+  - statefulset.yaml
+  - service.yaml
+  - backup-cronjob.yaml
+# Create the Secret "sticker-bank-mysql" out of band first (see secret.example.yaml).

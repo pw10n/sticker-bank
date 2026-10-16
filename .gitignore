@@ -1,0 +1,62 @@
+# ── Secrets & environment ──
+.env
+.env*
+*.env
+# env.example (no leading dot) is the committed template
+
+# ── Local databases & dumps ──
+*.db
+*.sqlite
+*.sqlite*
+*.sql.gz
+dumps/
+
+# ── Certificates & keys ──
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# ── Local config overrides ──
+config.local.*
+*.local.yaml
+*.local.yml
+*.secret.*
+application-local.*
+.testcontainers.properties
+
+# ── Claude Code local state, swarm state, private docs ──
+.claude/settings.local.json
+.claude/hooks/
+SWARM_STATE.md
+
+# ── Build outputs & caches ──
+node_modules/
+dist/
+build/
+out/
+.gradle/
+.kotlin/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+*.log
+*.tsbuildinfo
+
+# ── IDE / OS ──
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ── Editor / tool backups ──
+*.bak
+*.orig
+*.rej
+*~
+*.swp

@@ -1,0 +1,3410 @@
+{
+  "components" : {
+    "responses" : {
+      "Problem400" : {
+        "content" : {
+          "application/problem+json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description" : "Validation failed (VALIDATION_FAILED, with fieldErrors)"
+      },
+      "Problem401" : {
+        "content" : {
+          "application/problem+json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description" : "Parent session required (PARENT_SESSION_REQUIRED) or PIN incorrect (PIN_INCORRECT)"
+      },
+      "Problem403" : {
+        "content" : {
+          "application/problem+json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description" : "Missing X-Sticker-Bank header (CSRF_HEADER_MISSING)"
+      },
+      "Problem404" : {
+        "content" : {
+          "application/problem+json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description" : "Not found (NOT_FOUND)"
+      },
+      "Problem409" : {
+        "content" : {
+          "application/problem+json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description" : "Conflict (see ProblemDetail.code)"
+      },
+      "Problem422" : {
+        "content" : {
+          "application/problem+json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description" : "Unprocessable (see ProblemDetail.code)"
+      },
+      "Problem429" : {
+        "content" : {
+          "application/problem+json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/ProblemDetail"
+            }
+          }
+        },
+        "description" : "Too many PIN attempts (PIN_LOCKED, with retryAfterSeconds)"
+      }
+    },
+    "schemas" : {
+      "Actor" : {
+        "enum" : [ "CHILD", "PARENT" ],
+        "type" : "string"
+      },
+      "BookStickerDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "chartDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "childId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "claimedAt" : {
+            "format" : "date-time",
+            "type" : [ "string", "null" ]
+          },
+          "design" : {
+            "$ref" : "#/components/schemas/DesignRefDto"
+          },
+          "earnedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "prizeRequestId" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
+          "routineIconKey" : {
+            "type" : [ "string", "null" ]
+          },
+          "routineName" : {
+            "type" : [ "string", "null" ]
+          },
+          "source" : {
+            "$ref" : "#/components/schemas/StickerSource"
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/StickerStatus"
+          },
+          "stickerId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "chartDate", "childId", "claimedAt", "design", "earnedAt", "prizeRequestId", "routineIconKey", "routineName", "source", "status", "stickerId" ],
+        "type" : "object"
+      },
+      "BootstrapDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "appVersion" : {
+            "type" : "string"
+          },
+          "children" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChildSummaryDto"
+            },
+            "type" : "array"
+          },
+          "nextDayStartsAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "parentIdleTimeoutSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pendingPrizeRequestCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "serverTime" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "setupRequired" : {
+            "type" : "boolean"
+          },
+          "timeZone" : {
+            "type" : "string"
+          },
+          "today" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "appVersion", "children", "nextDayStartsAt", "parentIdleTimeoutSeconds", "pendingPrizeRequestCount", "serverTime", "setupRequired", "timeZone", "today" ],
+        "type" : "object"
+      },
+      "CategoryDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "designCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "position" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "designCount", "enabled", "id", "name", "position" ],
+        "type" : "object"
+      },
+      "CategoryInput" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "maxLength" : 40,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name" ],
+        "type" : "object"
+      },
+      "ChartRoutineDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "color" : {
+            "type" : [ "string", "null" ]
+          },
+          "doneCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "iconKey" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "routineId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "state" : {
+            "$ref" : "#/components/schemas/RoutineDayState"
+          },
+          "sticker" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ChartStickerDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "taskCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tasks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChartTaskDto"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "color", "doneCount", "iconKey", "name", "routineId", "state", "sticker", "taskCount", "tasks" ],
+        "type" : "object"
+      },
+      "ChartStickerDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "design" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/DesignRefDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "prizeRequestId" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
+          "revocable" : {
+            "type" : [ "boolean", "null" ]
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/StickerStatus"
+          },
+          "stickerId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "design", "prizeRequestId", "revocable", "status", "stickerId" ],
+        "type" : "object"
+      },
+      "ChartTaskDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "done" : {
+            "type" : "boolean"
+          },
+          "iconKey" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "taskId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "done", "iconKey", "label", "taskId" ],
+        "type" : "object"
+      },
+      "ChildDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "avatarKey" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "position" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "themeColor" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "avatarKey", "createdAt", "id", "name", "position", "themeColor" ],
+        "type" : "object"
+      },
+      "ChildInput" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "avatarKey" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 40,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "themeColor" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "avatarKey", "name", "themeColor" ],
+        "type" : "object"
+      },
+      "ChildSummaryDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "avatarKey" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "position" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "themeColor" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "avatarKey", "id", "name", "position", "themeColor" ],
+        "type" : "object"
+      },
+      "DailyChartDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "childId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "isToday" : {
+            "type" : "boolean"
+          },
+          "routines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChartRoutineDto"
+            },
+            "type" : "array"
+          },
+          "unclaimedFromEarlierDays" : {
+            "items" : {
+              "$ref" : "#/components/schemas/UnclaimedStickerDto"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "childId", "date", "isToday", "routines", "unclaimedFromEarlierDays" ],
+        "type" : "object"
+      },
+      "DesignDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "artworkKey" : {
+            "type" : "string"
+          },
+          "categoryId" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
+          "categoryName" : {
+            "type" : [ "string", "null" ]
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "inUse" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/DesignStatus"
+          }
+        },
+        "required" : [ "artworkKey", "categoryId", "categoryName", "createdAt", "id", "inUse", "name", "status" ],
+        "type" : "object"
+      },
+      "DesignInput" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "artworkKey" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "categoryId" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
+          "name" : {
+            "maxLength" : 40,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "artworkKey", "categoryId", "name" ],
+        "type" : "object"
+      },
+      "DesignRefDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "artworkKey" : {
+            "type" : "string"
+          },
+          "designId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "artworkKey", "designId", "name" ],
+        "type" : "object"
+      },
+      "DesignStatus" : {
+        "enum" : [ "ACTIVE", "RETIRED" ],
+        "type" : "string"
+      },
+      "DesignStatusRequest" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "status" : {
+            "$ref" : "#/components/schemas/DesignStatus"
+          }
+        },
+        "required" : [ "status" ],
+        "type" : "object"
+      },
+      "ErrorCode" : {
+        "enum" : [ "VALIDATION_FAILED", "PARENT_SESSION_REQUIRED", "PIN_INCORRECT", "PIN_LOCKED", "PIN_NOT_SET", "PIN_ALREADY_SET", "DAY_CHANGED", "FUTURE_DATE", "ROUTINE_NOT_SCHEDULED", "ROUTINE_LOCKED", "ALREADY_CLAIMED", "CHOICE_NOT_OFFERED", "PENDING_REQUEST_EXISTS", "STICKER_NOT_AVAILABLE", "REQUEST_NOT_PENDING", "REQUEST_NOT_COMPLETED", "DESIGN_IN_USE", "STICKER_USED", "REVOKE_CONFIRMATION_REQUIRED", "STICKER_REVOKED", "NOT_FOUND", "CSRF_HEADER_MISSING" ],
+        "type" : "string"
+      },
+      "FieldErrorDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "field" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "field", "message" ],
+        "type" : "object"
+      },
+      "HistoryDayDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "revocations" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RevocationDto"
+            },
+            "type" : "array"
+          },
+          "routines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HistoryRoutineDto"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "date", "revocations", "routines" ],
+        "type" : "object"
+      },
+      "HistoryDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "childId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "days" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HistoryDayDto"
+            },
+            "type" : "array"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "childId", "days", "from", "to" ],
+        "type" : "object"
+      },
+      "HistoryRoutineDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "doneCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "iconKey" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "routineId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "state" : {
+            "$ref" : "#/components/schemas/RoutineDayState"
+          },
+          "stickerId" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
+          "taskCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "doneCount", "iconKey", "name", "routineId", "state", "stickerId", "taskCount" ],
+        "type" : "object"
+      },
+      "LibraryDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "activeCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "designs" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DesignDto"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "activeCount", "designs" ],
+        "type" : "object"
+      },
+      "ParentSessionDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "absoluteExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "idleExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "idleTimeoutSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "absoluteExpiresAt", "idleExpiresAt", "idleTimeoutSeconds" ],
+        "type" : "object"
+      },
+      "PendingPrizeRequestDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "request" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/PrizeRequestDto"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "request" ],
+        "type" : "object"
+      },
+      "PickClaimRequest" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "designId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "designId" ],
+        "type" : "object"
+      },
+      "PinChangeRequest" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "currentPin" : {
+            "pattern" : "^\\d{4}$",
+            "type" : "string"
+          },
+          "newPin" : {
+            "pattern" : "^\\d{4}$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "currentPin", "newPin" ],
+        "type" : "object"
+      },
+      "PinResetDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "adminName" : {
+            "type" : "string"
+          },
+          "resetAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "adminName", "resetAt" ],
+        "type" : "object"
+      },
+      "PinSetupRequest" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "pin" : {
+            "pattern" : "^\\d{4}$",
+            "type" : "string"
+          },
+          "timeZone" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "pin", "timeZone" ],
+        "type" : "object"
+      },
+      "PrizeCancelReason" : {
+        "enum" : [ "CANCELLED", "ALL_STICKERS_REVOKED" ],
+        "type" : "string"
+      },
+      "PrizeCompleteRequest" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "note" : {
+            "maxLength" : 500,
+            "type" : [ "string", "null" ]
+          },
+          "prizeText" : {
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "prizeText" ],
+        "type" : "object"
+      },
+      "PrizeEditRequest" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "note" : {
+            "maxLength" : 500,
+            "type" : [ "string", "null" ]
+          },
+          "prizeText" : {
+            "maxLength" : 200,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "prizeText" ],
+        "type" : "object"
+      },
+      "PrizeRequestCreateRequest" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "stickerIds" : {
+            "items" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "stickerIds" ],
+        "type" : "object"
+      },
+      "PrizeRequestDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "cancelReason" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/PrizeCancelReason"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "cancelledAt" : {
+            "format" : "date-time",
+            "type" : [ "string", "null" ]
+          },
+          "cancelledBy" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/Actor"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "childId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "childName" : {
+            "type" : "string"
+          },
+          "completedAt" : {
+            "format" : "date-time",
+            "type" : [ "string", "null" ]
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "createdBy" : {
+            "$ref" : "#/components/schemas/Actor"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "note" : {
+            "type" : [ "string", "null" ]
+          },
+          "prizeText" : {
+            "type" : [ "string", "null" ]
+          },
+          "reversedAt" : {
+            "format" : "date-time",
+            "type" : [ "string", "null" ]
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/PrizeRequestStatus"
+          },
+          "stickerCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "stickers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PrizeStickerDto"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "cancelReason", "cancelledAt", "cancelledBy", "childId", "childName", "completedAt", "createdAt", "createdBy", "id", "note", "prizeText", "reversedAt", "status", "stickerCount", "stickers" ],
+        "type" : "object"
+      },
+      "PrizeRequestPageDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PrizeRequestDto"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "items", "nextCursor" ],
+        "type" : "object"
+      },
+      "PrizeRequestStatus" : {
+        "enum" : [ "PENDING", "COMPLETED", "CANCELLED", "REVERSED" ],
+        "type" : "string"
+      },
+      "PrizeStickerDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "chartDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "design" : {
+            "$ref" : "#/components/schemas/DesignRefDto"
+          },
+          "revoked" : {
+            "type" : "boolean"
+          },
+          "routineName" : {
+            "type" : [ "string", "null" ]
+          },
+          "stickerId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "chartDate", "design", "revoked", "routineName", "stickerId" ],
+        "type" : "object"
+      },
+      "ProblemDetail" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "attemptsRemaining" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "code" : {
+            "$ref" : "#/components/schemas/ErrorCode"
+          },
+          "detail" : {
+            "type" : "string"
+          },
+          "fieldErrors" : {
+            "items" : {
+              "$ref" : "#/components/schemas/FieldErrorDto"
+            },
+            "type" : "array"
+          },
+          "instance" : {
+            "type" : "string"
+          },
+          "retryAfterSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sticker" : {
+            "$ref" : "#/components/schemas/ChartStickerDto"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "today" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "status", "title" ],
+        "type" : "object"
+      },
+      "RevocationDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "chartDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "childId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "design" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/DesignRefDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "fromStatus" : {
+            "$ref" : "#/components/schemas/StickerStatus"
+          },
+          "note" : {
+            "type" : [ "string", "null" ]
+          },
+          "prizeRequestId" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
+          "requestCancelled" : {
+            "type" : "boolean"
+          },
+          "revokedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "routineIconKey" : {
+            "type" : [ "string", "null" ]
+          },
+          "routineId" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
+          "routineName" : {
+            "type" : [ "string", "null" ]
+          },
+          "stickerId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "taskId" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
+          "taskLabel" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "chartDate", "childId", "design", "fromStatus", "note", "prizeRequestId", "requestCancelled", "revokedAt", "routineIconKey", "routineId", "routineName", "stickerId", "taskId", "taskLabel" ],
+        "type" : "object"
+      },
+      "RevokeStickerRequest" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "note" : {
+            "maxLength" : 200,
+            "type" : [ "string", "null" ]
+          }
+        },
+        "type" : "object"
+      },
+      "RevokedStickerDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "fromStatus" : {
+            "$ref" : "#/components/schemas/StickerStatus"
+          },
+          "prizeRequestId" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
+          "requestCancelled" : {
+            "type" : "boolean"
+          },
+          "stickerId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "fromStatus", "prizeRequestId", "requestCancelled", "stickerId" ],
+        "type" : "object"
+      },
+      "RoutineCopyRequest" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "targetChildId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "targetChildId" ],
+        "type" : "object"
+      },
+      "RoutineDayState" : {
+        "enum" : [ "NOT_STARTED", "IN_PROGRESS", "AWAITING_PICK", "EARNED", "MISSED", "SKIPPED" ],
+        "type" : "string"
+      },
+      "RoutineDeleteResultDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "effectiveFrom" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "routineId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "effectiveFrom", "routineId" ],
+        "type" : "object"
+      },
+      "RoutineDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "childId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "color" : {
+            "type" : [ "string", "null" ]
+          },
+          "days" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Weekday"
+            },
+            "type" : "array"
+          },
+          "effectiveFrom" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "iconKey" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "paused" : {
+            "type" : "boolean"
+          },
+          "position" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tasks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TaskDto"
+            },
+            "type" : "array"
+          },
+          "upcomingSkips" : {
+            "items" : {
+              "format" : "date",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "childId", "color", "days", "effectiveFrom", "iconKey", "id", "name", "paused", "position", "tasks", "upcomingSkips" ],
+        "type" : "object"
+      },
+      "RoutineInput" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "color" : {
+            "type" : [ "string", "null" ]
+          },
+          "days" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Weekday"
+            },
+            "minItems" : 1,
+            "type" : [ "array", "null" ]
+          },
+          "iconKey" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 60,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "paused" : {
+            "type" : "boolean"
+          },
+          "tasks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TaskInput"
+            },
+            "maxItems" : 30,
+            "type" : "array"
+          }
+        },
+        "required" : [ "color", "iconKey", "name", "tasks" ],
+        "type" : "object"
+      },
+      "RoutineOrderRequest" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "routineIds" : {
+            "items" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "routineIds" ],
+        "type" : "object"
+      },
+      "RoutineSaveResultDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "appliesFromTomorrow" : {
+            "type" : "boolean"
+          },
+          "earnedPick" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/StickerPickDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "effectiveFrom" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "routine" : {
+            "$ref" : "#/components/schemas/RoutineDto"
+          }
+        },
+        "required" : [ "appliesFromTomorrow", "earnedPick", "effectiveFrom", "routine" ],
+        "type" : "object"
+      },
+      "SettingsDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "lastPinReset" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/PinResetDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "parentIdleTimeoutSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pinSetAt" : {
+            "format" : "date-time",
+            "type" : [ "string", "null" ]
+          },
+          "timeZone" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "lastPinReset", "parentIdleTimeoutSeconds", "pinSetAt", "timeZone" ],
+        "type" : "object"
+      },
+      "SettingsUpdateRequest" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "parentIdleTimeoutSeconds" : {
+            "format" : "int32",
+            "maximum" : 3600,
+            "minimum" : 60,
+            "type" : "integer"
+          },
+          "timeZone" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "parentIdleTimeoutSeconds", "timeZone" ],
+        "type" : "object"
+      },
+      "StickerBookPageDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "counts" : {
+            "$ref" : "#/components/schemas/StickerCountsDto"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BookStickerDto"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "counts", "items", "nextCursor" ],
+        "type" : "object"
+      },
+      "StickerCountsDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "available" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pending" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "totalEarned" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "unclaimed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "used" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "available", "pending", "totalEarned", "unclaimed", "used" ],
+        "type" : "object"
+      },
+      "StickerDetailDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "chartDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "childId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "claimedAt" : {
+            "format" : "date-time",
+            "type" : [ "string", "null" ]
+          },
+          "design" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/DesignRefDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "earnedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "prize" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/StickerPrizeDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "routineIconKey" : {
+            "type" : [ "string", "null" ]
+          },
+          "routineName" : {
+            "type" : [ "string", "null" ]
+          },
+          "source" : {
+            "$ref" : "#/components/schemas/StickerSource"
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/StickerStatus"
+          },
+          "stickerId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "chartDate", "childId", "claimedAt", "design", "earnedAt", "prize", "routineIconKey", "routineName", "source", "status", "stickerId" ],
+        "type" : "object"
+      },
+      "StickerPickDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "autoAwarded" : {
+            "type" : "boolean"
+          },
+          "chartDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "childId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "choices" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DesignRefDto"
+            },
+            "type" : "array"
+          },
+          "claimed" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/DesignRefDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "routineName" : {
+            "type" : [ "string", "null" ]
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/StickerStatus"
+          },
+          "stickerId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "autoAwarded", "chartDate", "childId", "choices", "claimed", "routineName", "status", "stickerId" ],
+        "type" : "object"
+      },
+      "StickerPrizeDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "completedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "note" : {
+            "type" : [ "string", "null" ]
+          },
+          "prizeRequestId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "prizeText" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "completedAt", "note", "prizeRequestId", "prizeText" ],
+        "type" : "object"
+      },
+      "StickerSource" : {
+        "enum" : [ "ROUTINE", "BONUS" ],
+        "type" : "string"
+      },
+      "StickerStatus" : {
+        "enum" : [ "UNCLAIMED", "AVAILABLE", "PENDING", "USED", "REVOKED" ],
+        "type" : "string"
+      },
+      "TaskDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "iconKey" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "position" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "iconKey", "id", "label", "position" ],
+        "type" : "object"
+      },
+      "TaskInput" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "iconKey" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
+          "label" : {
+            "maxLength" : 60,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "iconKey", "label" ],
+        "type" : "object"
+      },
+      "TaskToggleResultDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "pick" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/StickerPickDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "revoked" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/RevokedStickerDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "routine" : {
+            "$ref" : "#/components/schemas/ChartRoutineDto"
+          }
+        },
+        "required" : [ "pick", "revoked", "routine" ],
+        "type" : "object"
+      },
+      "UnclaimedStickerDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "chartDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "routineIconKey" : {
+            "type" : [ "string", "null" ]
+          },
+          "routineName" : {
+            "type" : [ "string", "null" ]
+          },
+          "stickerId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "chartDate", "routineIconKey", "routineName", "stickerId" ],
+        "type" : "object"
+      },
+      "UnlockRequest" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "pin" : {
+            "pattern" : "^\\d{4}$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "pin" ],
+        "type" : "object"
+      },
+      "Weekday" : {
+        "enum" : [ "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN" ],
+        "type" : "string"
+      }
+    },
+    "securitySchemes" : {
+      "parentSession" : {
+        "in" : "cookie",
+        "name" : "sb_parent",
+        "type" : "apiKey"
+      }
+    }
+  },
+  "info" : {
+    "description" : "Contract shared by the backend and frontend. All /api responses are Cache-Control: no-store. Every non-GET request must carry header `X-Sticker-Bank: 1`. Errors are application/problem+json (ProblemDetail).",
+    "title" : "Sticker Bank API",
+    "version" : "1.0.0"
+  },
+  "openapi" : "3.1.0",
+  "paths" : {
+    "/api/bootstrap" : {
+      "get" : {
+        "operationId" : "getBootstrap",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BootstrapDto"
+                }
+              }
+            },
+            "description" : "Success"
+          }
+        },
+        "summary" : "App bootstrap state",
+        "tags" : [ "family" ]
+      }
+    },
+    "/api/children/{childId}/days/{date}" : {
+      "get" : {
+        "operationId" : "getDailyChart",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "description" : "YYYY-MM-DD or the literal 'today'",
+          "in" : "path",
+          "name" : "date",
+          "required" : true,
+          "schema" : {
+            "pattern" : "^(\\d{4}-\\d{2}-\\d{2}|today)$",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DailyChartDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "422" : {
+            "$ref" : "#/components/responses/Problem422"
+          }
+        },
+        "summary" : "Daily chart for a child",
+        "tags" : [ "chart" ]
+      }
+    },
+    "/api/children/{childId}/days/{date}/tasks/{taskId}" : {
+      "delete" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "uncompleteTask",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "description" : "YYYY-MM-DD or the literal 'today'",
+          "in" : "path",
+          "name" : "date",
+          "required" : true,
+          "schema" : {
+            "pattern" : "^(\\d{4}-\\d{2}-\\d{2}|today)$",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "taskId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "description" : "Parent only. true revokes the routine's earned sticker (TDD 7.11); without it an earned routine answers 409 REVOKE_CONFIRMATION_REQUIRED",
+          "in" : "query",
+          "name" : "revokeSticker",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RevokeStickerRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TaskToggleResultDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          },
+          "422" : {
+            "$ref" : "#/components/responses/Problem422"
+          }
+        },
+        "summary" : "Un-complete a task, or revoke its sticker (parent, revokeSticker=true)",
+        "tags" : [ "chart" ]
+      },
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "completeTask",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "description" : "YYYY-MM-DD or the literal 'today'",
+          "in" : "path",
+          "name" : "date",
+          "required" : true,
+          "schema" : {
+            "pattern" : "^(\\d{4}-\\d{2}-\\d{2}|today)$",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "taskId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TaskToggleResultDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          },
+          "422" : {
+            "$ref" : "#/components/responses/Problem422"
+          }
+        },
+        "summary" : "Complete a task",
+        "tags" : [ "chart" ]
+      }
+    },
+    "/api/children/{childId}/prize-requests" : {
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "createPrizeRequest",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PrizeRequestCreateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PrizeRequestDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "summary" : "Create a prize request",
+        "tags" : [ "prize" ]
+      }
+    },
+    "/api/children/{childId}/prize-requests/pending" : {
+      "get" : {
+        "operationId" : "getPendingPrizeRequest",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PendingPrizeRequestDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "summary" : "The child's pending prize request, if any",
+        "tags" : [ "prize" ]
+      }
+    },
+    "/api/children/{childId}/stickers" : {
+      "get" : {
+        "operationId" : "getStickerBook",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "AVAILABLE", "PENDING", "USED" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 100,
+            "format" : "int32",
+            "maximum" : 200,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StickerBookPageDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "summary" : "Sticker book page",
+        "tags" : [ "sticker" ]
+      }
+    },
+    "/api/parent/children" : {
+      "get" : {
+        "operationId" : "listChildren",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ChildDto"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "List children",
+        "tags" : [ "child" ]
+      },
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "createChild",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChildInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChildDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Create a child",
+        "tags" : [ "child" ]
+      }
+    },
+    "/api/parent/children/{childId}" : {
+      "delete" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "deleteChild",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No content"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Delete a child and everything they own",
+        "tags" : [ "child" ]
+      },
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "updateChild",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChildInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChildDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Update a child",
+        "tags" : [ "child" ]
+      }
+    },
+    "/api/parent/children/{childId}/history" : {
+      "get" : {
+        "operationId" : "getHistory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HistoryDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Child history over a date range",
+        "tags" : [ "history" ]
+      }
+    },
+    "/api/parent/children/{childId}/routines" : {
+      "get" : {
+        "operationId" : "listRoutines",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/RoutineDto"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "List a child's routines",
+        "tags" : [ "routine" ]
+      },
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "createRoutine",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RoutineInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RoutineSaveResultDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Create a routine",
+        "tags" : [ "routine" ]
+      }
+    },
+    "/api/parent/children/{childId}/routines/order" : {
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "reorderRoutines",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RoutineOrderRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "No content"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Reorder a child's routines",
+        "tags" : [ "routine" ]
+      }
+    },
+    "/api/parent/library/categories" : {
+      "get" : {
+        "operationId" : "listCategories",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CategoryDto"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "List sticker categories",
+        "tags" : [ "library" ]
+      },
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "createCategory",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CategoryInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CategoryDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Create a category",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/parent/library/categories/{categoryId}" : {
+      "delete" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "deleteCategory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "categoryId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No content"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Delete a category",
+        "tags" : [ "library" ]
+      },
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "updateCategory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "categoryId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CategoryInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CategoryDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Update a category",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/parent/library/designs" : {
+      "get" : {
+        "operationId" : "listDesigns",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "q",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "$ref" : "#/components/schemas/DesignStatus"
+          }
+        }, {
+          "in" : "query",
+          "name" : "categoryId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LibraryDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "List sticker designs",
+        "tags" : [ "library" ]
+      },
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "createDesign",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DesignInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DesignDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Add a sticker design",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/parent/library/designs/{designId}" : {
+      "delete" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "deleteDesign",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "designId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No content"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Delete an unused sticker design",
+        "tags" : [ "library" ]
+      },
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "updateDesign",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "designId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DesignInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DesignDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Update a sticker design",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/parent/library/designs/{designId}/status" : {
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "setDesignStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "designId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DesignStatusRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DesignDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Activate or retire a sticker design",
+        "tags" : [ "library" ]
+      }
+    },
+    "/api/parent/pin" : {
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "setupPin",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PinSetupRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ParentSessionDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "summary" : "First-time PIN setup (starts a parent session)",
+        "tags" : [ "family" ]
+      },
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "changePin",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PinChangeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "No content"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "429" : {
+            "$ref" : "#/components/responses/Problem429"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Change the PIN",
+        "tags" : [ "family" ]
+      }
+    },
+    "/api/parent/prize-requests" : {
+      "get" : {
+        "operationId" : "listPrizeRequests",
+        "parameters" : [ {
+          "explode" : true,
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PrizeRequestStatus"
+            },
+            "type" : "array"
+          },
+          "style" : "form"
+        }, {
+          "in" : "query",
+          "name" : "childId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 50,
+            "format" : "int32",
+            "maximum" : 200,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PrizeRequestPageDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "List prize requests",
+        "tags" : [ "prize" ]
+      }
+    },
+    "/api/parent/prize-requests/{requestId}" : {
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "editPrizeRequest",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "requestId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PrizeEditRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PrizeRequestDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Edit a completed prize request",
+        "tags" : [ "prize" ]
+      }
+    },
+    "/api/parent/prize-requests/{requestId}/complete" : {
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "completePrizeRequest",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "requestId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PrizeCompleteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PrizeRequestDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Complete a pending prize request",
+        "tags" : [ "prize" ]
+      }
+    },
+    "/api/parent/routines/{routineId}" : {
+      "delete" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "deleteRoutine",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "routineId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RoutineDeleteResultDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Delete a routine (from tomorrow)",
+        "tags" : [ "routine" ]
+      },
+      "get" : {
+        "operationId" : "getRoutine",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "routineId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RoutineDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Get a routine",
+        "tags" : [ "routine" ]
+      },
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "updateRoutine",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "routineId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RoutineInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RoutineSaveResultDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Update a routine",
+        "tags" : [ "routine" ]
+      }
+    },
+    "/api/parent/routines/{routineId}/copy" : {
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "copyRoutine",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "routineId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RoutineCopyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RoutineDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Copy a routine to a child",
+        "tags" : [ "routine" ]
+      }
+    },
+    "/api/parent/routines/{routineId}/skips/{date}" : {
+      "delete" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "removeRoutineSkip",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "routineId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "path",
+          "name" : "date",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No content"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Remove a routine skip",
+        "tags" : [ "routine" ]
+      },
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "addRoutineSkip",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "routineId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "path",
+          "name" : "date",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No content"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Skip a routine on a day",
+        "tags" : [ "routine" ]
+      }
+    },
+    "/api/parent/session" : {
+      "delete" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "lockParentMode",
+        "responses" : {
+          "204" : {
+            "description" : "No content"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "End the parent session",
+        "tags" : [ "family" ]
+      },
+      "get" : {
+        "operationId" : "getParentSession",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ParentSessionDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Current parent session",
+        "tags" : [ "family" ]
+      },
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "unlock",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UnlockRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ParentSessionDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          },
+          "429" : {
+            "$ref" : "#/components/responses/Problem429"
+          }
+        },
+        "summary" : "Unlock parent mode with the PIN",
+        "tags" : [ "family" ]
+      }
+    },
+    "/api/parent/session/touch" : {
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "touchParentSession",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ParentSessionDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Extend the parent session idle timer",
+        "tags" : [ "family" ]
+      }
+    },
+    "/api/parent/settings" : {
+      "get" : {
+        "operationId" : "getSettings",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SettingsDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Family settings",
+        "tags" : [ "family" ]
+      },
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "updateSettings",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SettingsUpdateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SettingsDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Update family settings",
+        "tags" : [ "family" ]
+      }
+    },
+    "/api/prize-requests/{requestId}/cancel" : {
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "cancelPrizeRequest",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "requestId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PrizeRequestDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "summary" : "Cancel a pending prize request",
+        "tags" : [ "prize" ]
+      }
+    },
+    "/api/stickers/{stickerId}" : {
+      "get" : {
+        "operationId" : "getStickerDetail",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "stickerId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StickerDetailDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "summary" : "Sticker detail",
+        "tags" : [ "sticker" ]
+      }
+    },
+    "/api/stickers/{stickerId}/pick" : {
+      "get" : {
+        "operationId" : "getStickerPick",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "stickerId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StickerPickDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "summary" : "Get the pick (choices) for an earned sticker",
+        "tags" : [ "sticker" ]
+      },
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "claimStickerPick",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "stickerId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PickClaimRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookStickerDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          },
+          "422" : {
+            "$ref" : "#/components/responses/Problem422"
+          }
+        },
+        "summary" : "Claim one of the offered designs",
+        "tags" : [ "sticker" ]
+      }
+    }
+  },
+  "servers" : [ {
+    "url" : "/"
+  } ]
+}

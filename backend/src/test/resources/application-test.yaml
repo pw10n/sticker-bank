@@ -1,0 +1,4 @@
+sticker-bank:
+  parent-session:
+    cookie-secure: false
+logging.structured.format.console: ""
