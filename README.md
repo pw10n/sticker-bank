@@ -2,6 +2,10 @@
 
 Sticker Bank is a toddler sticker and reward-chart app, installable as a PWA. A child completes daily tasks by tapping them, earns stickers, and picks rewards; a parent uses a PIN-protected Parent Mode to manage tasks, the sticker library, rewards, and requests.
 
+<p align="center">
+  <img src="docs/images/kids-view-iphone.png" alt="Child Mode on an iPhone: the Morning Routine card with two of four tasks checked off and the Bedtime routine below" width="300">
+</p>
+
 ## Architecture
 
 - One container image: a Kotlin Spring Boot 4 service serves both the JSON API (`/api`) and the built React PWA from the same origin.
