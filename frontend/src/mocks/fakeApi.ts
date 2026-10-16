@@ -5,7 +5,9 @@ export type ScenarioName =
   | 'default'
   | 'fresh-install'
   | 'one-task-left'
+  | 'ready-to-finish'
   | 'pick-waiting'
+  | 'auto-finished'
   | 'empty-library'
   | 'pending-request'
   | 'offline'
@@ -14,7 +16,9 @@ export const SCENARIO_NAMES: readonly ScenarioName[] = [
   'default',
   'fresh-install',
   'one-task-left',
+  'ready-to-finish',
   'pick-waiting',
+  'auto-finished',
   'empty-library',
   'pending-request',
   'offline',

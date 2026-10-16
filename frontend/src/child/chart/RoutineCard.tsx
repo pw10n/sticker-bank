@@ -1,8 +1,8 @@
-import { useRef, useState, type Ref } from 'react'
+import { useEffect, useRef, useState, type Ref } from 'react'
 import { Link } from 'react-router'
 import type { ChartRoutine } from '../../api/types'
 import { Artwork } from '../../artwork'
-import { BigTile, ProgressRing } from '../../ui'
+import { BigTile, DOUBLE_TAP_GUARD_MS, ProgressRing } from '../../ui'
 
 export interface RoutineCardProps {
   routine: ChartRoutine
@@ -11,15 +11,31 @@ export interface RoutineCardProps {
   highlighted: boolean
   canWrite: boolean
   pendingTaskIds: ReadonlySet<number>
+  /** True while this routine's I'm Done! request is in flight. */
+  finishing?: boolean
   onToggle(routine: ChartRoutine, taskId: number, done: boolean, tileEl: HTMLElement | null): void
+  onFinish?(routine: ChartRoutine): void
   cardRef?: Ref<HTMLElement>
 }
 
-export function RoutineCard({ routine, childId, childColor, highlighted, canWrite, pendingTaskIds, onToggle, cardRef }: RoutineCardProps) {
+export function RoutineCard({
+  routine,
+  childId,
+  childColor,
+  highlighted,
+  canWrite,
+  pendingTaskIds,
+  finishing = false,
+  onToggle,
+  onFinish,
+  cardRef,
+}: RoutineCardProps) {
   const [expanded, setExpanded] = useState(false)
   const accent = routine.color ?? childColor
   const earned = routine.state === 'EARNED'
   const awaiting = routine.state === 'AWAITING_PICK'
+  // Ready to finish is not locked: tasks stay tappable so a mistaken tap can be undone before I'm Done! (FR-6.7).
+  const readyToFinish = routine.state === 'READY_TO_FINISH'
   const locked = earned || awaiting
   const stickerKey = routine.sticker?.design?.artworkKey
   const earnedArtKey = stickerKey ?? 'glowing-star'
@@ -78,6 +94,10 @@ export function RoutineCard({ routine, childId, childColor, highlighted, canWrit
           <>
             <span aria-hidden="true">✅ </span>Finished!
           </>
+        ) : readyToFinish ? (
+          <>
+            <span aria-hidden="true">🙌 </span>All tasks done. Tap I&apos;m Done!
+          </>
         ) : (
           progress
         )}
@@ -122,7 +142,41 @@ export function RoutineCard({ routine, childId, childColor, highlighted, canWrit
           </li>
         ))}
       </ul>
+
+      {readyToFinish && canWrite && <FinishButton busy={finishing} onPress={() => onFinish?.(routine)} />}
     </section>
+  )
+}
+
+/**
+ * I'm Done! (FR-6.6): its own row below the tiles, so nothing under the finger moves when it appears, and it ignores
+ * taps for a moment after it mounts so the tap that checked the last task cannot also press it.
+ */
+function FinishButton({ busy, onPress }: { busy: boolean; onPress(): void }) {
+  const armed = useRef(false)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      armed.current = true
+    }, DOUBLE_TAP_GUARD_MS)
+    return () => clearTimeout(timer)
+  }, [])
+  const handle = () => {
+    if (busy || !armed.current) return
+    onPress()
+  }
+  return (
+    <div className="pt-2">
+      <button
+        type="button"
+        aria-busy={busy || undefined}
+        disabled={busy}
+        onClick={handle}
+        className="flex min-h-[88px] w-full touch-manipulation items-center justify-center gap-3 rounded-full border-4 border-ink bg-sunshine px-6 text-[1.8rem] font-bold text-ink shadow-[0_6px_0_rgba(27,27,47,0.2)] focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-60"
+      >
+        <span aria-hidden="true">✅</span>
+        <span>I&apos;m Done!</span>
+      </button>
+    </div>
   )
 }
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router'
 import { isApiError } from '../../api/errors'
 import {
   useDailyChart,
+  useFinishRoutine,
   useHistory,
   usePendingPrizeRequest,
   useRevokeSticker,
@@ -47,12 +48,23 @@ function StickerReview({ sticker }: { sticker: ChartSticker }) {
       )}
       <div className="flex flex-col items-start gap-1">
         <p className="font-bold">{sticker.design ? sticker.design.name : 'Not picked yet'}</p>
-        <span
-          data-testid="sticker-status"
-          className="inline-flex rounded-full border-2 border-ink px-2 py-0.5 text-sm font-bold"
-        >
-          {STATUS_LABEL[sticker.status]}
-        </span>
+        <div className="flex flex-wrap gap-1">
+          <span
+            data-testid="sticker-status"
+            className="inline-flex rounded-full border-2 border-ink px-2 py-0.5 text-sm font-bold"
+          >
+            {STATUS_LABEL[sticker.status]}
+          </span>
+          {/* FR-6.11: the day ended before I'm Done! was tapped, so check the tasks were really done. */}
+          {sticker.autoFinished && (
+            <span
+              data-testid="sticker-auto-finished"
+              className="inline-flex rounded-full border-2 border-ink/40 bg-sunshine/30 px-2 py-0.5 text-sm font-bold"
+            >
+              Finished automatically
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -72,6 +84,7 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
   const { exitParentMode } = useMode()
   const chart = useDailyChart(childId, date, { poll: false })
   const toggle = useToggleTask(childId, date)
+  const finish = useFinishRoutine(childId, date)
   const skip = useSkipRoutine()
   const unskip = useUnskipRoutine()
   const [pickInfo, setPickInfo] = useState<PickInfo | null>(null)
@@ -133,10 +146,7 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
     toggle.mutate(
       { taskId, date, done },
       {
-        onSuccess: (res) => {
-          onChanged()
-          if (res.pick) setPickInfo({ pick: res.pick, routineName: r.name })
-        },
+        onSuccess: () => onChanged(),
         onError: (e) => {
           if (isApiError(e, 'REVOKE_CONFIRMATION_REQUIRED')) {
             const sticker = e.problem?.sticker
@@ -149,6 +159,30 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
           }
           setError(isApiError(e, 'ROUTINE_LOCKED') ? 'Already earned — locked.' : 'Could not update that task.')
         },
+      },
+    )
+  }
+
+  /** I'm Done! for a routine whose tasks are all checked (FR-6.5). This is what earns the sticker, never the last check. */
+  const onFinish = (r: ChartRoutine) => {
+    setNote(null)
+    if (finish.isPending || toggle.isPending) return
+    setError(null)
+    finish.mutate(
+      { routineId: r.routineId, date },
+      {
+        onSuccess: (res) => {
+          onChanged()
+          if (res.pick) setPickInfo({ pick: res.pick, routineName: r.name })
+        },
+        onError: (e) =>
+          setError(
+            isApiError(e, 'ROUTINE_NOT_READY')
+              ? 'Some tasks are not done yet.'
+              : isApiError(e, 'DAY_CHANGED')
+                ? 'A new day has started. Please reopen Parent Mode.'
+                : 'Could not finish that routine.',
+          ),
       },
     )
   }
@@ -218,6 +252,7 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
         {chart.data?.routines.map((r) => {
           const locked = r.state === 'EARNED' || r.state === 'AWAITING_PICK'
           const skipped = r.state === 'SKIPPED'
+          const ready = r.state === 'READY_TO_FINISH'
           const used = locked && r.sticker?.revocable === false
           return (
             <li key={r.routineId} aria-label={r.name} className="rounded-2xl border-2 border-ink/10 p-3">
@@ -227,7 +262,7 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
               </div>
               {!locked && !skipped && (
                 <p className="mb-2 text-sm font-semibold">
-                  {r.doneCount} of {r.taskCount} done
+                  {ready ? "All tasks done. Waiting for I'm Done!" : `${r.doneCount} of ${r.taskCount} done`}
                 </p>
               )}
               {r.sticker && <StickerReview sticker={r.sticker} />}
@@ -264,6 +299,13 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
                   </li>
                 ))}
               </ul>
+              {ready && (
+                <div className="mt-2">
+                  <Button loading={finish.isPending} disabled={toggle.isPending || revoke.isPending} onClick={() => onFinish(r)}>
+                    I&apos;m Done!
+                  </Button>
+                </div>
+              )}
               {!locked && (
                 <div className="mt-2">
                   {skipped ? (

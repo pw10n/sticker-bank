@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { z } from 'zod'
-import { useChildren, useCreateRoutine, useRoutine, useSaveRoutine } from '../../api/hooks'
+import { useCreateRoutine, useRoutine, useSaveRoutine } from '../../api/hooks'
 import { isApiError } from '../../api/errors'
 import type { Routine, RoutineInput, Weekday } from '../../api/types'
 import { Artwork, ArtworkPicker, artworkForUse } from '../../artwork'
@@ -81,10 +81,8 @@ const ROOT_FIELDS = ['name', 'iconKey', 'color', 'days', 'paused', 'tasks']
 
 function RoutineForm({ childId, routine }: { childId: number; routine: Routine | null }) {
   const navigate = useNavigate()
-  const children = useChildren()
   const create = useCreateRoutine(childId)
   const save = useSaveRoutine(routine?.id ?? 0)
-  const childName = children.data?.find((c) => c.id === childId)?.name ?? 'Your child'
   const listPath = `/parent/children/${childId}/routines`
   const defaultTaskIcon = artworkForUse('task')[0]?.key ?? ''
   const defaultRoutineIcon = artworkForUse('routine')[0]?.key ?? ''
@@ -143,10 +141,10 @@ function RoutineForm({ childId, routine }: { childId: number; routine: Routine |
         iconKey: t.iconKey,
       })),
     }
-    const done = (result: { appliesFromTomorrow: boolean; earnedPick: unknown }) => {
+    // Saving never earns a sticker: if the edit leaves every task done, the routine is just Ready to finish (I-3).
+    const done = (result: { appliesFromTomorrow: boolean }) => {
       const notices: string[] = []
       if (result.appliesFromTomorrow) notices.push("Today's sticker is already earned. Your changes start tomorrow.")
-      if (result.earnedPick) notices.push(`All of today's tasks are done now, so ${childName} earned a sticker!`)
       void navigate(listPath, { state: notices.length ? { notice: notices.join(' ') } : undefined })
     }
     if (routine) save.mutate(body, { onSuccess: done, onError: onServerError })

@@ -17,7 +17,7 @@ function routine(done10: boolean, done11: boolean): ChartRoutine {
     name: 'Morning',
     iconKey: 'sun',
     color: null,
-    state: doneCount === 2 ? 'COMPLETE' : doneCount > 0 ? 'IN_PROGRESS' : 'NOT_STARTED',
+    state: doneCount === 2 ? 'READY_TO_FINISH' : doneCount > 0 ? 'IN_PROGRESS' : 'NOT_STARTED',
     doneCount,
     taskCount: 2,
     tasks: [
@@ -110,46 +110,36 @@ describe('useToggleTask concurrency', () => {
     expect(tasksDone(qc)).toEqual([false, true])
   })
 
-  it('stores the earned pick even when another toggle is still in flight', async () => {
+  it('checking the last task ends Ready to finish without ever seeding a pick', async () => {
     const { qc, result } = setup()
-    const pick = {
-      stickerId: 77,
-      childId: 5,
-      chartDate: KEY_DATE,
-      routineName: 'Morning',
-      status: 'UNCLAIMED',
-      autoAwarded: false,
-      choices: [],
-      claimed: null,
-    }
     server.use(
       http.get('*/api/children/:childId/days/:date', () => HttpResponse.json(chart(true, true))),
       http.put(PUT, async ({ params }) => {
         if (params.taskId === '10') {
           await delay(10)
-          return HttpResponse.json({ routine: routine(true, false), pick })
+          return HttpResponse.json({ routine: routine(true, false), pick: null })
         }
         await delay(150)
         return HttpResponse.json({ routine: routine(true, true), pick: null })
       }),
     )
-    let p1!: Promise<{ pick: unknown }>
+    let p1!: Promise<unknown>
     let p2!: Promise<unknown>
     act(() => {
       p1 = result.current.mutateAsync({ taskId: 10, date: KEY_DATE, done: true })
       p2 = result.current.mutateAsync({ taskId: 11, date: KEY_DATE, done: true })
     })
-    let res!: { pick: unknown }
     await act(async () => {
-      res = await p1
+      await p1
     })
-    expect(res.pick).toMatchObject({ stickerId: 77 })
-    expect(qc.getQueryData(qk.pick(77))).toMatchObject({ stickerId: 77 })
+    // the earlier, stale response must not undo the later optimistic tap
     expect(tasksDone(qc)).toEqual([true, true])
     await act(async () => {
       await p2
     })
     await waitFor(() => expect(tasksDone(qc)).toEqual([true, true]))
+    await waitFor(() => expect(qc.getQueryData<DailyChart>(qk.chart(5, KEY_DATE))!.routines[0].state).toBe('READY_TO_FINISH'))
+    expect(qc.getQueryCache().findAll({ queryKey: ['pick'] })).toHaveLength(0)
   })
 
   it('a single toggle still writes the server routine', async () => {

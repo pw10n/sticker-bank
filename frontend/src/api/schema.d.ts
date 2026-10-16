@@ -38,6 +38,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/children/{childId}/days/{date}/routines/{routineId}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * I'm Done!: finish a routine whose tasks are all done and earn its sticker
+         * @description State-changing request: requires header `X-Sticker-Bank: 1`.
+         */
+        post: operations["finishRoutine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/children/{childId}/days/{date}/tasks/{taskId}": {
         parameters: {
             query?: never;
@@ -673,6 +693,7 @@ export interface components {
             tasks: components["schemas"]["ChartTaskDto"][];
         };
         ChartStickerDto: {
+            autoFinished: boolean | null;
             design: components["schemas"]["DesignRefDto"] | null;
             /** Format: int64 */
             prizeRequestId: number | null;
@@ -753,7 +774,7 @@ export interface components {
             status: components["schemas"]["DesignStatus"];
         };
         /** @enum {string} */
-        ErrorCode: "VALIDATION_FAILED" | "PARENT_SESSION_REQUIRED" | "PIN_INCORRECT" | "PIN_LOCKED" | "PIN_NOT_SET" | "PIN_ALREADY_SET" | "DAY_CHANGED" | "FUTURE_DATE" | "ROUTINE_NOT_SCHEDULED" | "ROUTINE_LOCKED" | "ALREADY_CLAIMED" | "CHOICE_NOT_OFFERED" | "PENDING_REQUEST_EXISTS" | "STICKER_NOT_AVAILABLE" | "REQUEST_NOT_PENDING" | "REQUEST_NOT_COMPLETED" | "DESIGN_IN_USE" | "STICKER_USED" | "REVOKE_CONFIRMATION_REQUIRED" | "STICKER_REVOKED" | "NOT_FOUND" | "CSRF_HEADER_MISSING";
+        ErrorCode: "VALIDATION_FAILED" | "PARENT_SESSION_REQUIRED" | "PIN_INCORRECT" | "PIN_LOCKED" | "PIN_NOT_SET" | "PIN_ALREADY_SET" | "DAY_CHANGED" | "FUTURE_DATE" | "ROUTINE_NOT_SCHEDULED" | "ROUTINE_NOT_READY" | "ROUTINE_LOCKED" | "ALREADY_CLAIMED" | "CHOICE_NOT_OFFERED" | "PENDING_REQUEST_EXISTS" | "STICKER_NOT_AVAILABLE" | "REQUEST_NOT_PENDING" | "REQUEST_NOT_COMPLETED" | "DESIGN_IN_USE" | "STICKER_USED" | "REVOKE_CONFIRMATION_REQUIRED" | "STICKER_REVOKED" | "NOT_FOUND" | "CSRF_HEADER_MISSING";
         FieldErrorDto: {
             field: string;
             message: string;
@@ -774,6 +795,7 @@ export interface components {
             to: string;
         };
         HistoryRoutineDto: {
+            autoFinished: boolean;
             /** Format: int32 */
             doneCount: number;
             iconKey: string;
@@ -927,7 +949,7 @@ export interface components {
             targetChildId: number;
         };
         /** @enum {string} */
-        RoutineDayState: "NOT_STARTED" | "IN_PROGRESS" | "AWAITING_PICK" | "EARNED" | "MISSED" | "SKIPPED";
+        RoutineDayState: "NOT_STARTED" | "IN_PROGRESS" | "READY_TO_FINISH" | "AWAITING_PICK" | "EARNED" | "MISSED" | "SKIPPED";
         RoutineDeleteResultDto: {
             /** Format: date */
             effectiveFrom: string;
@@ -964,7 +986,6 @@ export interface components {
         };
         RoutineSaveResultDto: {
             appliesFromTomorrow: boolean;
-            earnedPick: components["schemas"]["StickerPickDto"] | null;
             /** Format: date */
             effectiveFrom: string;
             routine: components["schemas"]["RoutineDto"];
@@ -1191,6 +1212,35 @@ export interface operations {
             };
             400: components["responses"]["Problem400"];
             404: components["responses"]["Problem404"];
+            422: components["responses"]["Problem422"];
+        };
+    };
+    finishRoutine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                childId: number;
+                /** @description YYYY-MM-DD or the literal 'today' */
+                date: string;
+                routineId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskToggleResultDto"];
+                };
+            };
+            403: components["responses"]["Problem403"];
+            404: components["responses"]["Problem404"];
+            409: components["responses"]["Problem409"];
             422: components["responses"]["Problem422"];
         };
     };

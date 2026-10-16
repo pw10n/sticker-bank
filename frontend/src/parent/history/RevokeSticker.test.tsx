@@ -41,6 +41,7 @@ function routine(status: StickerStatus | null, done = true): ChartRoutine {
           design: status === 'UNCLAIMED' ? null : { designId: 5, name: 'Happy Frog', artworkKey: 'sticker-frog' },
           prizeRequestId: status === 'PENDING' ? 3 : null,
           revocable: status !== 'USED',
+          autoFinished: false,
         }
       : null,
     tasks: [

@@ -30,13 +30,6 @@ function invalidateRoutine(qc: QueryClient, childId: number, routineId?: number)
   void qc.invalidateQueries({ queryKey: ['parent', 'history', childId] })
 }
 
-function seedPick(qc: QueryClient, result: RoutineSaveResult) {
-  if (result.earnedPick) {
-    qc.setQueryData(qk.pick(result.earnedPick.stickerId), result.earnedPick)
-    void qc.invalidateQueries({ queryKey: ['book', result.earnedPick.childId] })
-  }
-}
-
 export function useCreateRoutine(childId: number) {
   const qc = useQueryClient()
   return useMutation<RoutineSaveResult, ApiError, RoutineInput>({
@@ -45,7 +38,6 @@ export function useCreateRoutine(childId: number) {
         api.POST('/api/parent/children/{childId}/routines', { params: { path: { childId } }, body }),
       ),
     onSuccess: (result) => {
-      seedPick(qc, result)
       invalidateRoutine(qc, childId, result.routine.id)
     },
   })
@@ -58,8 +50,7 @@ export function useSaveRoutine(routineId: number) {
       unwrap<RoutineSaveResult>(
         api.PUT('/api/parent/routines/{routineId}', { params: { path: { routineId } }, body }),
       ),
-    onSuccess: (result) => {
-      seedPick(qc, result)
+    onSuccess: () => {
       // The childId is not part of the mutation variables; refresh all child-scoped lists.
       void qc.invalidateQueries({ queryKey: ['parent', 'routines'] })
       void qc.invalidateQueries({ queryKey: qk.parent.routine(routineId) })

@@ -8,7 +8,7 @@ import { addDays, dayLabel, weekDates, weekStart } from './dates'
 import { DayDetail } from './DayDetail'
 import { StateBadge } from './StateBadge'
 
-const LEGEND = ['EARNED', 'AWAITING_PICK', 'MISSED', 'SKIPPED', 'IN_PROGRESS'] as const
+const LEGEND = ['EARNED', 'AWAITING_PICK', 'READY_TO_FINISH', 'MISSED', 'SKIPPED', 'IN_PROGRESS'] as const
 
 export default function HistoryScreen() {
   const params = useParams()
@@ -109,6 +109,12 @@ export default function HistoryScreen() {
                           <li key={r.routineId} className="flex flex-col gap-1">
                             <span className="text-sm font-semibold">{r.name}</span>
                             <StateBadge state={r.state} doneCount={r.doneCount} taskCount={r.taskCount} />
+                            {/* FR-6.11: the day ended before I'm Done! was tapped, so check the tasks were really done. */}
+                            {r.autoFinished && (
+                              <span data-testid="auto-finished-mark" className="text-xs font-semibold">
+                                <span aria-hidden="true">⏰ </span>Finished automatically
+                              </span>
+                            )}
                           </li>
                         ))}
                         {(day?.revocations ?? []).length > 0 && (

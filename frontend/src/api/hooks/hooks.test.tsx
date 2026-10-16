@@ -10,6 +10,7 @@ import {
   useAllAvailableStickers,
   useClaimPick,
   useCreatePrizeRequest,
+  useFinishRoutine,
   useParentSession,
   useReorderRoutines,
   useToggleTask,
@@ -63,7 +64,7 @@ const problem = (status: number, code: string) =>
 const togglePath = '*/api/children/5/days/2026-01-05/tasks/10'
 
 describe('useToggleTask', () => {
-  it('updates the cache optimistically, then applies the server routine and seeds the pick', async () => {
+  it('updates the cache optimistically, then applies the server routine', async () => {
     const { qc, wrapper } = setup()
     qc.setQueryData(qk.chart(5, 'today'), chart())
     let release!: () => void
@@ -73,10 +74,7 @@ describe('useToggleTask', () => {
       http.put(togglePath, async ({ request }) => {
         header = request.headers.get('X-Sticker-Bank')
         await gate
-        return HttpResponse.json({
-          routine: routine({ state: 'AWAITING_PICK', doneCount: 1 }),
-          pick: pick(),
-        })
+        return HttpResponse.json({ routine: routine({ state: 'READY_TO_FINISH', doneCount: 2 }), pick: null })
       }),
     )
     const { result } = renderHook(() => useToggleTask(5, 'today'), { wrapper })
@@ -90,8 +88,46 @@ describe('useToggleTask', () => {
     release()
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(header).toBe('1')
-    expect(qc.getQueryData<DailyChart>(qk.chart(5, 'today'))!.routines[0]!.state).toBe('AWAITING_PICK')
-    expect(qc.getQueryData<StickerPick>(qk.pick(99))?.stickerId).toBe(99)
+    // checking tasks never earns a sticker: the server only says the routine is Ready to finish (FR-6.6)
+    expect(qc.getQueryData<DailyChart>(qk.chart(5, 'today'))!.routines[0]!.state).toBe('READY_TO_FINISH')
+    expect(qc.getQueryData<StickerPick>(qk.pick(99))).toBeUndefined()
+  })
+
+  it('puts a ready-to-finish routine straight back in progress when a task is unchecked', async () => {
+    const { qc, wrapper } = setup()
+    qc.setQueryData(
+      qk.chart(5, 'today'),
+      {
+        ...chart(),
+        routines: [
+          routine({
+            state: 'READY_TO_FINISH',
+            doneCount: 2,
+            tasks: [
+              { taskId: 10, label: 'Teeth', iconKey: 't', done: true },
+              { taskId: 11, label: 'Dress', iconKey: 'd', done: true },
+            ],
+          }),
+        ],
+      } satisfies DailyChart,
+    )
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    server.use(
+      http.delete(togglePath, async () => {
+        await gate
+        return HttpResponse.json({ routine: routine({ state: 'IN_PROGRESS', doneCount: 1 }), pick: null })
+      }),
+    )
+    const { result } = renderHook(() => useToggleTask(5, 'today'), { wrapper })
+    act(() => result.current.mutate({ taskId: 10, date: '2026-01-05', done: false }))
+    await waitFor(() => {
+      const r = qc.getQueryData<DailyChart>(qk.chart(5, 'today'))!.routines[0]!
+      expect(r.state).toBe('IN_PROGRESS')
+      expect(r.doneCount).toBe(1)
+    })
+    release()
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
   })
 
   it('uses DELETE when undoing', async () => {
@@ -124,6 +160,49 @@ describe('useToggleTask', () => {
     act(() => result.current.mutate({ taskId: 10, date: '2026-01-05', done: true }))
     await waitFor(() => expect(result.current.error?.code).toBe('DAY_CHANGED'))
     expect(qc.getQueryState(qk.bootstrap())?.isInvalidated).toBe(true)
+    expect(qc.getQueryState(qk.chart(5, 'today'))?.isInvalidated).toBe(true)
+  })
+})
+
+describe('useFinishRoutine', () => {
+  const finishPath = '*/api/children/5/days/2026-01-05/routines/1/finish'
+
+  it('posts I\'m Done!, applies the routine and seeds the pick', async () => {
+    const { qc, wrapper } = setup()
+    qc.setQueryData(qk.chart(5, 'today'), { ...chart(), routines: [routine({ state: 'READY_TO_FINISH', doneCount: 2 })] })
+    let header: string | null = null
+    server.use(
+      http.post(finishPath, ({ request }) => {
+        header = request.headers.get('X-Sticker-Bank')
+        return HttpResponse.json({ routine: routine({ state: 'AWAITING_PICK', doneCount: 2 }), pick: pick() })
+      }),
+    )
+    const { result } = renderHook(() => useFinishRoutine(5, 'today'), { wrapper })
+    await act(() => result.current.mutateAsync({ routineId: 1, date: '2026-01-05' }))
+    expect(header).toBe('1')
+    expect(qc.getQueryData<DailyChart>(qk.chart(5, 'today'))!.routines[0]!.state).toBe('AWAITING_PICK')
+    expect(qc.getQueryData<StickerPick>(qk.pick(99))?.stickerId).toBe(99)
+  })
+
+  it('invalidates bootstrap and chart on DAY_CHANGED', async () => {
+    const { qc, wrapper } = setup()
+    qc.setQueryData(qk.chart(5, 'today'), chart())
+    qc.setQueryData(qk.bootstrap(), { x: 1 })
+    server.use(http.post(finishPath, () => problem(409, 'DAY_CHANGED')))
+    const { result } = renderHook(() => useFinishRoutine(5, 'today'), { wrapper })
+    act(() => result.current.mutate({ routineId: 1, date: '2026-01-05' }))
+    await waitFor(() => expect(result.current.error?.code).toBe('DAY_CHANGED'))
+    expect(qc.getQueryState(qk.bootstrap())?.isInvalidated).toBe(true)
+    expect(qc.getQueryState(qk.chart(5, 'today'))?.isInvalidated).toBe(true)
+  })
+
+  it('reloads the chart on ROUTINE_NOT_READY', async () => {
+    const { qc, wrapper } = setup()
+    qc.setQueryData(qk.chart(5, 'today'), chart())
+    server.use(http.post(finishPath, () => problem(409, 'ROUTINE_NOT_READY')))
+    const { result } = renderHook(() => useFinishRoutine(5, 'today'), { wrapper })
+    act(() => result.current.mutate({ routineId: 1, date: '2026-01-05' }))
+    await waitFor(() => expect(result.current.error?.code).toBe('ROUTINE_NOT_READY'))
     expect(qc.getQueryState(qk.chart(5, 'today'))?.isInvalidated).toBe(true)
   })
 })

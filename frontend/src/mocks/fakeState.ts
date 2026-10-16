@@ -93,6 +93,8 @@ export interface FakeChild {
   themeColor: string
   position: number
   createdAt: string
+  /** Last day whose end-of-day auto-finish has been applied (TDD 7.12). `null` = never settled. */
+  settledThrough: string | null
 }
 
 export interface FakeTask {
@@ -131,6 +133,8 @@ export interface FakeSticker {
   prizeRequestId: number | null
   earnedAt: string
   claimedAt: string | null
+  /** How the sticker was finished (FR-6.11). `null` for seeded stickers and bonus stickers. */
+  finishMode: 'TAPPED' | 'AUTO' | null
 }
 
 export interface FakePrizeRequest {
@@ -635,6 +639,7 @@ export function seedChild(input: { name: string; avatarKey: string; themeColor: 
     ...input,
     position: state.children.reduce((m, c) => Math.max(m, c.position), 0) + 1,
     createdAt: nowIso(),
+    settledThrough: null,
   }
   state.children.push(child)
   return child
@@ -772,18 +777,18 @@ function isScheduled(r: FakeRoutine, date: string): boolean {
   return !r.paused && r.tasks.length >= 1 && r.days.includes(weekdayOf(date))
 }
 
-function saveResult(r: FakeRoutine, earnedPick: StickerPick | null): RoutineSaveResult {
+function saveResult(r: FakeRoutine): RoutineSaveResult {
   const sticker = stickerForRoutineDay(r.id, today())
-  const appliesFromTomorrow = sticker !== undefined && earnedPick === null
+  const appliesFromTomorrow = sticker !== undefined
   r.effectiveFrom = appliesFromTomorrow ? addDays(today(), 1) : today()
-  return { routine: routineDto(r), effectiveFrom: r.effectiveFrom, appliesFromTomorrow, earnedPick }
+  return { routine: routineDto(r), effectiveFrom: r.effectiveFrom, appliesFromTomorrow }
 }
 
 export function createRoutine(childId: number, body: unknown): RoutineSaveResult {
   findChild(childId)
   const p = parseRoutine(body)
   const r = seedRoutine({ childId, ...p, tasks: p.tasks })
-  return saveResult(r, null)
+  return saveResult(r)
 }
 
 export function updateRoutine(routineId: number, body: unknown): RoutineSaveResult {
@@ -801,15 +806,8 @@ export function updateRoutine(routineId: number, body: unknown): RoutineSaveResu
     for (const k of [...state.completions]) if (k.startsWith(`${t.id}|`)) state.completions.delete(k)
   }
   Object.assign(r, { name: p.name, iconKey: p.iconKey, color: p.color, days: p.days, paused: p.paused })
-  // Removing the last unfinished task completes the routine today.
-  let earnedPick: StickerPick | null = null
-  const t = today()
-  if (isScheduled(r, t) && !r.upcomingSkips.includes(t) && !stickerForRoutineDay(r.id, t)) {
-    if (r.tasks.every((x) => state.completions.has(doneKey(x.id, t)))) {
-      earnedPick = pickDto(earnSticker(r, t))
-    }
-  }
-  return saveResult(r, earnedPick)
+  // Saving never earns a sticker (BR-18). If the edit leaves every task done, the routine is just Ready to finish (I-3).
+  return saveResult(r)
 }
 
 export function deleteRoutine(routineId: number): RoutineDeleteResult {
@@ -882,7 +880,7 @@ function routineState(
 ): RoutineDayState {
   if (r.upcomingSkips.includes(date)) return 'SKIPPED'
   if (sticker) return sticker.status === 'UNCLAIMED' ? 'AWAITING_PICK' : 'EARNED'
-  if (count > 0 && done >= count) return 'EARNED'
+  if (count > 0 && done >= count) return 'READY_TO_FINISH'
   if (date < today()) return 'MISSED'
   return done > 0 ? 'IN_PROGRESS' : 'NOT_STARTED'
 }
@@ -912,6 +910,7 @@ function chartRoutine(r: FakeRoutine, date: string): ChartRoutine {
           design: sticker.designId !== null ? designRef(sticker.designId) : null,
           prizeRequestId: state.parentSession ? sticker.prizeRequestId : null,
           revocable: state.parentSession ? sticker.status !== 'USED' : null,
+          autoFinished: state.parentSession ? sticker.finishMode === 'AUTO' : null,
         }
       : null,
   }
@@ -927,6 +926,7 @@ export function getDailyChart(childId: number, rawDate: string): DailyChart {
   findChild(childId)
   const date = rawDate === 'today' ? today() : requireDate(rawDate)
   requireNotFuture(date)
+  settleEndedDays(childId)
   return {
     childId,
     date,
@@ -966,14 +966,19 @@ function shuffled<T>(items: T[]): T[] {
   return a
 }
 
-/** Earns the routine's sticker for `date`: UNCLAIMED with up to 3 choices, or the AVAILABLE fallback. */
-export function earnSticker(r: FakeRoutine, date: string): FakeSticker {
+/** Earns the routine's sticker for `date`: UNCLAIMED with up to 3 choices, or the AVAILABLE fallback. Only I'm Done! and day settlement call this. */
+export function earnSticker(
+  r: FakeRoutine,
+  date: string,
+  finishMode: 'TAPPED' | 'AUTO',
+  earnedAt: string = nowIso(),
+): FakeSticker {
   const pool = designPool()
   const choices = shuffled(pool)
     .slice(0, 3)
     .map((d) => d.id)
   const auto = choices.length === 0
-  const now = nowIso()
+  const now = earnedAt
   const sticker: FakeSticker = {
     id: newId('sticker'),
     childId: r.childId,
@@ -989,9 +994,34 @@ export function earnSticker(r: FakeRoutine, date: string): FakeSticker {
     prizeRequestId: null,
     earnedAt: now,
     claimedAt: auto ? now : null,
+    finishMode,
   }
   state.stickers.push(sticker)
   return sticker
+}
+
+/** The instant a day ends: the start of the next one (TDD 7.12). */
+const endOfDayIso = (date: string): string => `${addDays(date, 1)}T00:00:00.000Z`
+
+/**
+ * Mirrors DaySettlement (TDD 7.12): a routine still Ready to finish when its day ended is finished for the child.
+ * Lazy and per child. `settledThrough` is the watermark, so a parent's later edit of a past day is never auto-finished.
+ */
+function settleEndedDays(childId: number): void {
+  const child = findChild(childId)
+  const yesterday = addDays(today(), -1)
+  if (child.settledThrough !== null && child.settledThrough >= yesterday) return
+  // A child with no watermark has nothing waiting; the first touch just starts the watermark.
+  if (child.settledThrough !== null) {
+    for (let d = addDays(child.settledThrough, 1); d <= yesterday; d = addDays(d, 1)) {
+      for (const r of scheduledRoutines(childId, d)) {
+        if (r.upcomingSkips.includes(d) || stickerForRoutineDay(r.id, d)) continue
+        if (!r.tasks.every((t) => state.completions.has(doneKey(t.id, d)))) continue
+        earnSticker(r, d, 'AUTO', endOfDayIso(d))
+      }
+    }
+  }
+  child.settledThrough = yesterday
 }
 
 /** Validates a task write and returns its context. */
@@ -1007,23 +1037,44 @@ function taskContext(childId: number, rawDate: string, taskId: number) {
   if (date < today() && !state.parentSession) {
     throw conflict('DAY_CHANGED', 'A new day has started', { today: today() })
   }
+  settleEndedDays(childId)
   return { routine, date }
 }
 
 export function completeTask(childId: number, rawDate: string, taskId: number): TaskToggleResult {
   const { routine, date } = taskContext(childId, rawDate, taskId)
+  // Checking the last task never earns anything (FR-7.1): the routine just becomes READY_TO_FINISH.
+  if (!stickerForRoutineDay(routine.id, date)) state.completions.add(doneKey(taskId, date))
+  return { routine: chartRoutine(routine, date), pick: null, revoked: null }
+}
+
+/** I'm Done! (FR-6.8): the only way to earn the sticker besides the day ending. Idempotent, like the backend. */
+export function finishRoutine(childId: number, rawDate: string, routineId: number): TaskToggleResult {
+  findChild(childId)
+  const date = requireDate(rawDate)
+  requireNotFuture(date)
+  if (date < today() && !state.parentSession) {
+    throw conflict('DAY_CHANGED', 'A new day has started', { today: today() })
+  }
+  settleEndedDays(childId)
+  const routine = state.routines.find((r) => r.id === routineId && r.childId === childId)
+  if (!routine) throw notFound('Routine')
+  if (!isScheduled(routine, date) || routine.upcomingSkips.includes(date)) {
+    throw conflict('ROUTINE_NOT_SCHEDULED', 'That routine is not scheduled for this day')
+  }
   const existing = stickerForRoutineDay(routine.id, date)
-  let sticker = existing
-  const wasDone = state.completions.has(doneKey(taskId, date))
-  state.completions.add(doneKey(taskId, date))
-  if (!existing && !wasDone && routine.tasks.every((t) => state.completions.has(doneKey(t.id, date)))) {
-    sticker = earnSticker(routine, date)
+  if (existing) {
+    return {
+      routine: chartRoutine(routine, date),
+      pick: existing.status === 'UNCLAIMED' ? pickDto(existing) : null,
+      revoked: null,
+    }
   }
-  return {
-    routine: chartRoutine(routine, date),
-    pick: sticker && sticker.status === 'UNCLAIMED' ? pickDto(sticker) : null,
-    revoked: null,
+  if (!routine.tasks.every((t) => state.completions.has(doneKey(t.id, date)))) {
+    throw conflict('ROUTINE_NOT_READY', 'Some tasks in this routine are not done yet')
   }
+  const sticker = earnSticker(routine, date, 'TAPPED')
+  return { routine: chartRoutine(routine, date), pick: pickDto(sticker), revoked: null }
 }
 
 export function uncompleteTask(
@@ -1130,6 +1181,7 @@ export function getHistory(childId: number, from: string | undefined, to: string
   const t = requireDate(to, 'to')
   if (f > t) throw invalid([{ field: 'from', message: 'must not be after "to"' }])
   requireNotFuture(t)
+  settleEndedDays(childId)
   const days: HistoryDay[] = []
   for (let d = f, n = 0; d <= t; d = addDays(d, 1), n++) {
     if (n >= 62) throw invalid([{ field: 'to', message: 'the range can cover at most 62 days' }])
@@ -1145,6 +1197,7 @@ export function getHistory(childId: number, from: string | undefined, to: string
           doneCount: c.doneCount,
           taskCount: c.taskCount,
           stickerId: c.sticker ? c.sticker.stickerId : null,
+          autoFinished: stickerForRoutineDay(r.id, d)?.finishMode === 'AUTO',
         }
       }),
       revocations: state.revocations
@@ -1174,6 +1227,7 @@ export function seedSticker(input: Partial<FakeSticker> & Pick<FakeSticker, 'chi
     prizeRequestId: null,
     earnedAt: noonIso(input.chartDate),
     claimedAt: status === 'UNCLAIMED' ? null : noonIso(input.chartDate),
+    finishMode: null,
     ...input,
   }
   state.stickers.push(sticker)

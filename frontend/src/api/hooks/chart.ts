@@ -35,7 +35,9 @@ function applyToggle(chart: DailyChart, taskId: number, done: boolean): DailyCha
       if (!task || task.done === done) return r
       const doneCount = Math.max(0, Math.min(r.taskCount, r.doneCount + (done ? 1 : -1)))
       let state = r.state
-      if (state === 'NOT_STARTED' || state === 'IN_PROGRESS') {
+      // Checking the last task stays IN_PROGRESS until the server says READY_TO_FINISH (the I'm Done! button follows
+      // the server). Unchecking a task of a Ready-to-finish routine puts it straight back in progress (FR-6.7).
+      if (state === 'NOT_STARTED' || state === 'IN_PROGRESS' || state === 'READY_TO_FINISH') {
         state = doneCount > 0 ? 'IN_PROGRESS' : 'NOT_STARTED'
       }
       return {
@@ -101,15 +103,60 @@ export function useToggleTask(childId: number, chartKeyDate: string) {
             : old,
         )
       }
-      if (result.pick) {
-        qc.setQueryData(qk.pick(result.pick.stickerId), result.pick)
-        void qc.invalidateQueries({ queryKey: ['book', childId] })
-      }
     },
     onSettled: (_data, error) => {
       // A dead network cannot reconcile anything; the app refetches on reconnect.
       if (isApiError(error, 'NETWORK')) return
       if (isLastInFlight()) void qc.invalidateQueries({ queryKey: key })
+    },
+  })
+}
+
+interface FinishVars {
+  routineId: number
+  date: string
+}
+
+/**
+ * I'm Done! (FR-6.8): finishes a routine whose tasks are all done. This is the only call that earns a sticker from the
+ * app besides the day ending, so checking the last task never does (FR-7.1). The response carries the saved pick.
+ */
+export function useFinishRoutine(childId: number, chartKeyDate: string) {
+  const qc = useQueryClient()
+  const key = qk.chart(childId, chartKeyDate)
+  return useMutation<TaskToggleResult, ApiError, FinishVars>({
+    mutationKey: ['finishRoutine', childId, chartKeyDate],
+    mutationFn: ({ routineId, date }) =>
+      unwrap<TaskToggleResult>(
+        api.POST('/api/children/{childId}/days/{date}/routines/{routineId}/finish', {
+          params: { path: { childId, date, routineId } },
+        }),
+      ),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['parent', 'history', childId] })
+      qc.setQueryData<DailyChart>(key, (old) =>
+        old
+          ? {
+              ...old,
+              routines: old.routines.map((r: ChartRoutine) =>
+                r.routineId === result.routine.routineId ? result.routine : r,
+              ),
+            }
+          : old,
+      )
+      if (result.pick) {
+        qc.setQueryData(qk.pick(result.pick.stickerId), result.pick)
+        void qc.invalidateQueries({ queryKey: ['book', childId] })
+      }
+    },
+    onError: (error) => {
+      // A new day started (the sticker is waiting in the tray), or another device unchecked a task: just reload.
+      if (isApiError(error, 'DAY_CHANGED')) {
+        void qc.invalidateQueries({ queryKey: qk.bootstrap() })
+        void qc.invalidateQueries({ queryKey: ['chart', childId] })
+      } else if (isApiError(error, 'ROUTINE_NOT_READY')) {
+        void qc.invalidateQueries({ queryKey: key })
+      }
     },
   })
 }

@@ -10,6 +10,7 @@ import { server } from '../../mocks/server'
 import { getDailyChart } from '../../mocks/fakeState'
 import { getFakeState, resetFakeApi, setFakeToday, type ScenarioName } from '../../mocks/fakeApi'
 import { addRoutineSkip, today } from '../../mocks/fakeState'
+import { celebrateRoutine } from '../../ui'
 import ChildLayout from '../ChildLayout'
 import DailyChartScreen from './DailyChartScreen'
 
@@ -79,6 +80,7 @@ function load(scenario: ScenarioName = 'default') {
 
 beforeEach(() => {
   vi.stubGlobal('localStorage', memoryStorage())
+  vi.mocked(celebrateRoutine).mockClear()
 })
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -108,12 +110,81 @@ describe('DailyChartScreen', () => {
     expect(getFakeState().completions.size).toBe(before)
   })
 
-  it('navigates to the pick route when the last task earns a sticker', async () => {
+  it("checking the last task shows I'm Done! and earns nothing, then tapping it opens the pick", async () => {
     load('one-task-left')
     const router = setup()
     const morning = await screen.findByRole('region', { name: 'Morning Routine' })
-    const tile = within(morning).getByRole('button', { pressed: false })
-    await userEvent.click(tile)
+    expect(within(morning).queryByRole('button', { name: /I'm Done!/ })).not.toBeInTheDocument()
+    await userEvent.click(within(morning).getByRole('button', { pressed: false }))
+
+    const done = await within(morning).findByRole('button', { name: /I'm Done!/ })
+    // no sticker, no celebration and no navigation yet (FR-6.6, FR-7.2)
+    expect(router.state.location.pathname).toBe('/c/1')
+    expect(getFakeState().stickers.filter((s) => s.childId === 1 && s.chartDate === today() && s.status !== 'REVOKED')).toHaveLength(0)
+    expect(celebrateRoutine).not.toHaveBeenCalled()
+
+    // the tap that checked the last task cannot also press the button (FR-6.6)
+    await userEvent.click(done)
+    expect(router.state.location.pathname).toBe('/c/1')
+    await new Promise((resolve) => setTimeout(resolve, 700))
+
+    await userEvent.click(done)
+    await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/c\/1\/pick\/\d+$/))
+    expect(celebrateRoutine).toHaveBeenCalledTimes(1)
+    expect(getFakeState().stickers.filter((s) => s.childId === 1 && s.chartDate === today() && s.finishMode === 'TAPPED')).toHaveLength(1)
+  })
+
+  it('a task tapped by mistake is undone while the routine is ready to finish (FR-6.7)', async () => {
+    load('ready-to-finish')
+    const router = setup()
+    const morning = await screen.findByRole('region', { name: 'Morning Routine' })
+    expect(await within(morning).findByRole('button', { name: /I'm Done!/ })).toBeInTheDocument()
+    expect(within(morning).getByText(/All tasks done/)).toBeInTheDocument()
+
+    await userEvent.click(within(morning).getByRole('button', { name: 'Shoes on' }))
+    await waitFor(() => expect(within(morning).queryByRole('button', { name: /I'm Done!/ })).not.toBeInTheDocument())
+    expect(within(morning).getByText('3 of 4 done')).toBeInTheDocument()
+    expect(within(morning).getByRole('button', { name: 'Shoes on' })).toHaveAttribute('aria-pressed', 'false')
+    expect(router.state.location.pathname).toBe('/c/1')
+    expect(getFakeState().stickers.filter((s) => s.childId === 1 && s.chartDate === today() && s.status !== 'REVOKED')).toHaveLength(0)
+
+    // checking it again brings the button back (after the tile's own 600 ms double-tap guard)
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    await userEvent.click(within(morning).getByRole('button', { name: 'Shoes on' }))
+    expect(await within(morning).findByRole('button', { name: /I'm Done!/ })).toBeInTheDocument()
+  })
+
+  it('keeps the button after a reload, since the state comes from the saved tasks (FR-6.9)', async () => {
+    load('ready-to-finish')
+    setup()
+    const morning = await screen.findByRole('region', { name: 'Morning Routine' })
+    expect(await within(morning).findByRole('button', { name: /I'm Done!/ })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Morning Routine' })).toHaveAttribute('data-highlighted', 'true')
+  })
+
+  it('reloads quietly when another device unchecked a task before I\'m Done! (ROUTINE_NOT_READY)', async () => {
+    load('ready-to-finish')
+    const router = setup()
+    const morning = await screen.findByRole('region', { name: 'Morning Routine' })
+    const done = await within(morning).findByRole('button', { name: /I'm Done!/ })
+    // a parent's device unchecks a task behind the child's back
+    const routine = getFakeState().routines.find((r) => r.childId === 1 && r.name === 'Morning Routine')!
+    getFakeState().completions.delete(`${routine.tasks[0].id}|${today()}`)
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    await userEvent.click(done)
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Morning Routine' })).queryByRole('button', { name: /I'm Done!/ })).not.toBeInTheDocument())
+    expect(router.state.location.pathname).toBe('/c/1')
+    expect(celebrateRoutine).not.toHaveBeenCalled()
+  })
+
+  it('an auto-finished sticker from yesterday waits in the tray, without a celebration (FR-6.10)', async () => {
+    load('auto-finished')
+    const router = setup()
+    const tray = await screen.findByRole('region', { name: 'Stickers to pick' })
+    const link = within(tray).getByRole('link', { name: /Pick your sticker!/ })
+    expect(link).toHaveTextContent('Yesterday')
+    expect(celebrateRoutine).not.toHaveBeenCalled()
+    await userEvent.click(link)
     await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/c\/1\/pick\/\d+$/))
   })
 

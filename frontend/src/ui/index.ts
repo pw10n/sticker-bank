@@ -1,6 +1,6 @@
 export { Button, type ButtonProps } from './Button'
 export { IconButton, type IconButtonProps } from './IconButton'
-export { BigTile, type BigTileProps } from './BigTile'
+export { BigTile, DOUBLE_TAP_GUARD_MS, type BigTileProps } from './BigTile'
 export { ProgressRing } from './ProgressRing'
 export { Sheet, type SheetProps } from './Sheet'
 export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog'

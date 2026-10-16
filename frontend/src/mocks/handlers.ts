@@ -86,6 +86,12 @@ export const handlers: RequestHandler[] = [
     '*/api/children/:childId/days/:date/tasks/:taskId',
     route(200, (c) => fake.completeTask(idParam(c, 'childId'), strParam(c, 'date'), idParam(c, 'taskId'))),
   ),
+  http.post(
+    '*/api/children/:childId/days/:date/routines/:routineId/finish',
+    route(200, (c) =>
+      fake.finishRoutine(idParam(c, 'childId'), strParam(c, 'date'), idParam(c, 'routineId')),
+    ),
+  ),
   http.delete(
     '*/api/children/:childId/days/:date/tasks/:taskId',
     route(200, async (c) => {

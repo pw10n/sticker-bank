@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
-import { resetFakeApi, setFakeParentSession } from '../../mocks/fakeApi'
+import { resetFakeApi, setFakeParentSession, type ScenarioName } from '../../mocks/fakeApi'
 import { addDays, dayLabel, weekStart } from './dates'
 import HistoryScreen from './HistoryScreen'
 
@@ -13,8 +13,8 @@ function localToday(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-function setup() {
-  resetFakeApi()
+function setup(scenario: ScenarioName = 'default') {
+  resetFakeApi(scenario)
   setFakeParentSession(true)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(
@@ -83,7 +83,7 @@ describe('HistoryScreen', () => {
     expect(within(dialog).getAllByText(/Sticker earned — locked/).length).toBeGreaterThan(0)
   })
 
-  it('earns a sticker by finishing a missed past routine and offers pick now', async () => {
+  it("checking the last task of a missed past routine leaves it ready to finish, and I'm Done! earns the sticker", async () => {
     const { router } = setup()
     const { user, dialog } = await openAgo(3)
     const routine = await within(dialog).findByRole('listitem', { name: 'Morning Routine' })
@@ -92,10 +92,31 @@ describe('HistoryScreen', () => {
       await user.click(next)
       await waitFor(() => expect(next).toHaveAttribute('aria-pressed', 'true'))
     }
+    // FR-6.5, FR-7.1: the last check earns nothing. The parent taps I'm Done! for the child.
+    const done = await within(routine).findByRole('button', { name: /I'm Done!/ })
+    expect(within(routine).getByText(/All tasks done/)).toBeInTheDocument()
+    expect(screen.queryByText(/earned a sticker/)).not.toBeInTheDocument()
+    await user.click(done)
     expect(await screen.findByText(/Jane Doe earned a sticker for Morning Routine/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Later/ })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Let Jane Doe pick now' }))
     await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/c\/1\/pick\//))
+  })
+
+  it('a ready-to-finish routine unchecks freely, with no confirm sheet (BR-19)', async () => {
+    setup()
+    const { user, dialog } = await openAgo(3)
+    const routine = await within(dialog).findByRole('listitem', { name: 'Morning Routine' })
+    for (let i = 0; i < 3; i++) {
+      const next = within(routine).getAllByRole('button', { pressed: false })[0]
+      await user.click(next)
+      await waitFor(() => expect(next).toHaveAttribute('aria-pressed', 'true'))
+    }
+    await within(routine).findByRole('button', { name: /I'm Done!/ })
+    const checked = within(routine).getAllByRole('button', { pressed: true })[0]
+    await user.click(checked)
+    await waitFor(() => expect(within(routine).queryByRole('button', { name: /I'm Done!/ })).not.toBeInTheDocument())
+    expect(screen.queryByRole('dialog', { name: 'Remove this sticker?' })).not.toBeInTheDocument()
   })
 
   it('keeps toggles serialized so rapid taps still end with the earned panel', async () => {
@@ -111,8 +132,26 @@ describe('HistoryScreen', () => {
       }
       expect(tasks.every((b) => b.getAttribute('aria-pressed') === 'true')).toBe(true)
     })
-    expect(await screen.findByText(/Jane Doe earned a sticker for Morning Routine/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Later/ })).toBeInTheDocument()
+    expect(await within(routine).findByRole('button', { name: /I'm Done!/ })).toBeInTheDocument()
+    expect(screen.queryByText(/earned a sticker/)).not.toBeInTheDocument()
+  })
+
+  it('marks a sticker the day\'s end earned as finished automatically, in the calendar and the review', async () => {
+    setup('auto-finished')
+    // the calendar marks the day (FR-6.11)
+    await waitFor(() => expect(screen.getAllByTestId('auto-finished-mark').length).toBeGreaterThan(0))
+    const { dialog } = await openAgo(1)
+    const routine = await within(dialog).findByRole('listitem', { name: 'Morning Routine' })
+    expect(within(routine).getByTestId('sticker-auto-finished')).toHaveTextContent('Finished automatically')
+    expect(within(routine).getByTestId('sticker-status')).toHaveTextContent('Unclaimed')
+  })
+
+  it('does not mark a sticker the child finished by tapping', async () => {
+    setup()
+    const { dialog } = await openAgo(1)
+    const routine = await within(dialog).findByRole('listitem', { name: 'Morning Routine' })
+    expect(within(routine).queryByTestId('sticker-auto-finished')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('auto-finished-mark')).not.toBeInTheDocument()
   })
 
   it('skips today and un-skips', async () => {

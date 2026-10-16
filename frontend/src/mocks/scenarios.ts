@@ -166,10 +166,31 @@ export function buildScenario(name: ScenarioName): void {
     case 'one-task-left':
       seedCompletion(routine.tasks[2].id, t)
       break
+    case 'ready-to-finish':
+      // Every task is done but I'm Done! has not been tapped, so there is no sticker yet (FR-6.6).
+      routine.tasks.forEach((task) => seedCompletion(task.id, t))
+      break
     case 'pick-waiting':
       routine.tasks.forEach((task) => seedCompletion(task.id, t))
-      earnSticker(routine, t)
+      earnSticker(routine, t, 'TAPPED')
       break
+    case 'auto-finished': {
+      // Yesterday ended with the routine still Ready to finish, so the day's end earned an unclaimed sticker (FR-6.10).
+      const yesterday = addDays(t, -1)
+      const earned = state.stickers.find((s) => s.routineId === routine.id && s.chartDate === yesterday)
+      if (earned) {
+        const pool = state.designs.filter((d) => !d.isFallback && d.status === 'ACTIVE')
+        Object.assign(earned, {
+          status: 'UNCLAIMED',
+          designId: null,
+          claimedAt: null,
+          choices: [pool[0].id, pool[5].id, pool[10].id],
+          earnedAt: `${t}T00:00:00.000Z`,
+          finishMode: 'AUTO',
+        })
+      }
+      break
+    }
     case 'empty-library':
       for (const d of state.designs) if (!d.isFallback) d.status = 'RETIRED'
       break

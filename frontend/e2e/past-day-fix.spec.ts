@@ -35,6 +35,10 @@ test('a parent completes a missed past day and defers the sticker pick', async (
     await expect(task).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 })
   }
 
+  // FR-6.5: the last check only leaves the routine Ready to finish. The parent taps I'm Done! for the child.
+  await expect(dialog.getByRole('status')).toHaveCount(0)
+  await routine.getByRole('button', { name: /I'm Done!/ }).click()
+
   await expect(dialog.getByRole('status')).toContainText(`Jane Doe earned a sticker for ${routineName}!`, {
     timeout: 10_000,
   })

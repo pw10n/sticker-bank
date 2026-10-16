@@ -41,7 +41,7 @@ function routineWith(sheet: Locator, status: string): Locator {
     .last()
 }
 
-test('revoke today, the child re-taps and gets a new pick', async ({ page }) => {
+test("revoke today, the child re-taps, taps I'm Done! and gets a new pick", async ({ page }) => {
   await openJaneChart(page, 'pick-waiting')
   await enterParentMode(page)
   await openJaneHistory(page)
@@ -72,6 +72,12 @@ test('revoke today, the child re-taps and gets a new pick', async ({ page }) => 
   const show = chartMorning.getByRole('button', { name: 'Show' })
   if (await show.count()) await show.click()
   await chartMorning.getByRole('button', { name: /Brush teeth/, pressed: false }).click()
+
+  // The re-check only makes the routine Ready to finish again (FR-12.5). I'm Done! earns the new sticker.
+  const done = chartMorning.getByRole('button', { name: /I'm Done!/ })
+  await expect(done).toBeVisible()
+  await page.waitForTimeout(700) // the button ignores taps right after it appears
+  await done.click()
 
   await expect(page.getByRole('heading', { name: 'Pick your sticker!' })).toBeVisible({ timeout: 20_000 })
   const choices = page.getByRole('main').getByRole('button').filter({ hasNotText: 'Not now' })

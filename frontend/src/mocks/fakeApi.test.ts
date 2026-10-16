@@ -23,15 +23,32 @@ function janeMorning() {
   return r
 }
 
-function finishJaneMorning() {
+/** Checks Jane's last two Morning tasks. The routine is then Ready to finish, with no sticker yet (FR-6.6). */
+function checkJaneMorning() {
   const r = janeMorning()
   fake.completeTask(JANE, fake.today(), r.tasks[2].id)
   return fake.completeTask(JANE, fake.today(), r.tasks[3].id)
 }
 
+/** Checks the tasks and taps I'm Done!, which is what earns the sticker (FR-6.8). */
+function finishJaneMorning() {
+  checkJaneMorning()
+  return fake.finishRoutine(JANE, fake.today(), janeMorning().id)
+}
+
 describe('fake state rules', () => {
   it('builds every scenario', () => {
-    for (const name of ['default', 'fresh-install', 'one-task-left', 'pick-waiting', 'empty-library', 'pending-request', 'offline'] as ScenarioName[]) {
+    for (const name of [
+      'default',
+      'fresh-install',
+      'one-task-left',
+      'ready-to-finish',
+      'pick-waiting',
+      'auto-finished',
+      'empty-library',
+      'pending-request',
+      'offline',
+    ] as ScenarioName[]) {
       expect(() => resetFakeApi(name)).not.toThrow()
       expect(isScenarioName(name)).toBe(true)
     }
@@ -52,7 +69,7 @@ describe('fake state rules', () => {
     expect(fake.getStickerPick(john.unclaimedFromEarlierDays[0].stickerId).choices).toHaveLength(3)
   })
 
-  it('last task earns a pick with 3 distinct pool designs', () => {
+  it('I\'m Done! earns a pick with 3 distinct pool designs', () => {
     resetFakeApi()
     const res = finishJaneMorning()
     expect(res.routine.state).toBe('AWAITING_PICK')
@@ -182,7 +199,7 @@ describe('fake state rules', () => {
   it('empty library auto-awards the fallback', () => {
     resetFakeApi('empty-library')
     const res = finishJaneMorning()
-    expect(res.pick?.status).toBeUndefined()
+    expect(res.pick).toMatchObject({ status: 'AVAILABLE', autoAwarded: true })
     expect(res.routine.state).toBe('EARNED')
     const sticker = getFakeState().stickers.find((s) => s.id === res.routine.sticker?.stickerId)
     expect(sticker).toMatchObject({ autoAwarded: true, status: 'AVAILABLE' })
@@ -301,5 +318,119 @@ describe('fake API contract limits and the today alias', () => {
     expect(code(() => fake.createRoutine(JANE, routine('Thirty', thirty)))).toBe('ok')
     expect(code(() => fake.createRoutine(JANE, routine('ThirtyOne', [...thirty, task('x')])))).toBe('400 VALIDATION_FAILED')
     expect(code(() => fake.createRoutine(JANE, routine('Empty', [])))).toBe('ok')
+  })
+})
+
+describe('finish step (FR-6.6 to FR-6.11)', () => {
+  it('the last task only makes the routine ready to finish and earns nothing', () => {
+    resetFakeApi()
+    const res = checkJaneMorning()
+    expect(res.routine).toMatchObject({ state: 'READY_TO_FINISH', doneCount: 4, taskCount: 4, sticker: null })
+    expect(res.pick).toBeNull()
+    expect(getFakeState().stickers.filter((s) => s.routineId === janeMorning().id && s.chartDate === fake.today())).toHaveLength(0)
+  })
+
+  it('a task tapped by mistake is a plain undo while the routine is ready to finish', () => {
+    resetFakeApi()
+    checkJaneMorning()
+    const r = janeMorning()
+    const undone = fake.uncompleteTask(JANE, fake.today(), r.tasks[0].id)
+    expect(undone.routine).toMatchObject({ state: 'IN_PROGRESS', doneCount: 3 })
+    expect(undone.revoked).toBeNull()
+    expect(code(() => fake.finishRoutine(JANE, fake.today(), r.id))).toBe('409 ROUTINE_NOT_READY')
+    expect(fake.completeTask(JANE, fake.today(), r.tasks[0].id).routine.state).toBe('READY_TO_FINISH')
+  })
+
+  it('finishing is idempotent and returns the same saved choices', () => {
+    resetFakeApi()
+    const first = finishJaneMorning()
+    const again = fake.finishRoutine(JANE, fake.today(), janeMorning().id)
+    expect(again.routine.state).toBe('AWAITING_PICK')
+    expect(again.pick?.stickerId).toBe(first.pick?.stickerId)
+    expect(again.pick?.choices).toEqual(first.pick?.choices)
+    expect(getFakeState().stickers.filter((s) => s.routineId === janeMorning().id && s.chartDate === fake.today())).toHaveLength(1)
+  })
+
+  it('finish rejects other children, skipped routines, future days and a child on a past day', () => {
+    resetFakeApi()
+    const r = janeMorning()
+    expect(code(() => fake.finishRoutine(JOHN, fake.today(), r.id))).toBe('404 NOT_FOUND')
+    expect(code(() => fake.finishRoutine(JANE, fake.addDays(fake.today(), 1), r.id))).toBe('422 FUTURE_DATE')
+    expect(code(() => fake.finishRoutine(JANE, fake.addDays(fake.today(), -1), r.id))).toBe('409 DAY_CHANGED')
+    fake.addRoutineSkip(r.id, fake.today())
+    expect(code(() => fake.finishRoutine(JANE, fake.today(), r.id))).toBe('409 ROUTINE_NOT_SCHEDULED')
+  })
+
+  it('saving a routine that leaves every task done earns nothing (I-3)', () => {
+    resetFakeApi('one-task-left')
+    const r = janeMorning()
+    const kept = r.tasks.slice(0, 3).map((t) => ({ id: t.id, label: t.label, iconKey: t.iconKey }))
+    const saved = fake.updateRoutine(r.id, { name: r.name, iconKey: r.iconKey, color: r.color, days: r.days, paused: false, tasks: kept })
+    expect(saved.appliesFromTomorrow).toBe(false)
+    expect(fake.getDailyChart(JANE, fake.today()).routines[0]).toMatchObject({ state: 'READY_TO_FINISH', sticker: null })
+  })
+
+  it('the ready-to-finish scenario starts with the button showing and no sticker', () => {
+    resetFakeApi('ready-to-finish')
+    expect(fake.getDailyChart(JANE, fake.today()).routines[0]).toMatchObject({ state: 'READY_TO_FINISH', sticker: null })
+  })
+
+  describe('ending the day', () => {
+    it('finishes a routine left ready to finish, unclaimed and marked automatic', () => {
+      resetFakeApi()
+      checkJaneMorning()
+      setFakeToday(fake.addDays(fake.today(), 1))
+      const chart = fake.getDailyChart(JANE, 'today')
+      const yesterday = fake.addDays(fake.today(), -1)
+      const tray = chart.unclaimedFromEarlierDays.find((u) => u.chartDate === yesterday)
+      expect(tray).toBeDefined()
+      const sticker = getFakeState().stickers.find((s) => s.id === tray?.stickerId)
+      expect(sticker).toMatchObject({ status: 'UNCLAIMED', finishMode: 'AUTO', earnedAt: `${fake.addDays(yesterday, 1)}T00:00:00.000Z` })
+      expect(sticker?.choices).toHaveLength(3)
+      // idempotent
+      fake.getDailyChart(JANE, 'today')
+      expect(getFakeState().stickers.filter((s) => s.chartDate === yesterday && s.routineId === janeMorning().id)).toHaveLength(1)
+      // only a parent session sees the flag
+      expect(fake.getDailyChart(JANE, yesterday).routines[0].sticker?.autoFinished).toBeNull()
+      setFakeParentSession(true)
+      expect(fake.getDailyChart(JANE, yesterday).routines[0].sticker?.autoFinished).toBe(true)
+      expect(fake.getHistory(JANE, yesterday, yesterday).days[0].routines[0].autoFinished).toBe(true)
+    })
+
+    it('leaves partly done and skipped routines alone', () => {
+      resetFakeApi('one-task-left')
+      const bedtime = getFakeState().routines.find((x) => x.childId === JANE && x.name === 'Bedtime')
+      if (!bedtime) throw new Error('missing routine')
+      bedtime.tasks.forEach((t) => fake.seedCompletion(t.id, fake.today()))
+      fake.addRoutineSkip(bedtime.id, fake.today())
+      fake.getDailyChart(JANE, 'today') // starts the watermark
+      setFakeToday(fake.addDays(fake.today(), 1))
+      expect(fake.getDailyChart(JANE, 'today').unclaimedFromEarlierDays).toHaveLength(0)
+    })
+
+    it('does not auto-finish a past day a parent edited after it was settled', () => {
+      resetFakeApi()
+      fake.getDailyChart(JANE, 'today')
+      setFakeToday(fake.addDays(fake.today(), 1))
+      fake.getDailyChart(JANE, 'today') // settles yesterday
+      setFakeParentSession(true)
+      const yesterday = fake.addDays(fake.today(), -1)
+      const r = janeMorning()
+      r.tasks.forEach((t) => fake.completeTask(JANE, yesterday, t.id))
+      setFakeToday(fake.addDays(fake.today(), 1))
+      fake.getDailyChart(JANE, 'today')
+      expect(fake.getDailyChart(JANE, yesterday).routines[0].state).toBe('READY_TO_FINISH')
+      expect(fake.finishRoutine(JANE, yesterday, r.id).routine.state).toBe('AWAITING_PICK')
+    })
+
+    it('the auto-finished scenario waits in the tray with a marked sticker', () => {
+      resetFakeApi('auto-finished')
+      const chart = fake.getDailyChart(JANE, 'today')
+      expect(chart.unclaimedFromEarlierDays).toHaveLength(1)
+      expect(fake.getStickerPick(chart.unclaimedFromEarlierDays[0].stickerId).choices).toHaveLength(3)
+      setFakeParentSession(true)
+      const yesterday = fake.addDays(fake.today(), -1)
+      expect(fake.getDailyChart(JANE, yesterday).routines[0].sticker).toMatchObject({ autoFinished: true, status: 'UNCLAIMED' })
+    })
   })
 })
