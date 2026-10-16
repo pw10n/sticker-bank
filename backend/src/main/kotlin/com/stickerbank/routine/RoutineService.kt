@@ -5,8 +5,6 @@ import com.stickerbank.common.DomainException
 import com.stickerbank.common.ErrorCode
 import com.stickerbank.common.FamilyClock
 import com.stickerbank.common.FieldErrorDto
-import com.stickerbank.common.StickerEarner
-import com.stickerbank.common.StickerPickDto
 import com.stickerbank.common.Weekdays
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.simple.JdbcClient
@@ -39,7 +37,7 @@ private data class RevisionWrite(
     val tasks: List<Triple<Long, String, String>>,
 )
 
-private data class SaveOutcome(val today: LocalDate, val effective: LocalDate, val earned: StickerPickDto?)
+private data class SaveOutcome(val today: LocalDate, val effective: LocalDate)
 
 @Service
 class RoutineService(
@@ -47,8 +45,6 @@ class RoutineService(
     private val childLock: ChildLock,
     private val validator: RoutineInputValidator,
     private val policy: RevisionPolicy,
-    private val planQuery: RoutinePlanQuery,
-    private val earner: StickerEarner,
     private val familyClock: FamilyClock,
     private val clock: Clock,
 ) {
@@ -84,7 +80,7 @@ class RoutineService(
                 id
             }
         log.info("Created routine {} for child {}", routineId, childId)
-        return RoutineSaveResultDto(get(routineId), today, appliesFromTomorrow = false, earnedPick = null)
+        return RoutineSaveResultDto(get(routineId), today, appliesFromTomorrow = false)
     }
 
     fun update(routineId: Long, input: RoutineInput): RoutineSaveResultDto {
@@ -100,10 +96,11 @@ class RoutineService(
                 val tasks = valid.tasks.map { Triple(it.id ?: insertTask(routineId), it.label, it.iconKey) }
                 val mask = valid.daysMask ?: latest?.daysMask ?: Weekdays.ALL
                 writeRevision(routineId, effective, RevisionWrite(valid.name, valid.iconKey, valid.color, mask, valid.paused, false, tasks))
-                SaveOutcome(today, effective, if (effective == today) earnIfComplete(childId, routineId, today) else null)
+                // Saving never earns a sticker. If the edit leaves every task done the routine is just Ready to finish (I-3).
+                SaveOutcome(today, effective)
             }
         log.info("Saved routine {} effective {}", routineId, saved.effective)
-        return RoutineSaveResultDto(get(routineId), saved.effective, saved.effective == saved.today.plusDays(1), saved.earned)
+        return RoutineSaveResultDto(get(routineId), saved.effective, saved.effective == saved.today.plusDays(1))
     }
 
     fun delete(routineId: Long): RoutineDeleteResultDto {
@@ -301,21 +298,6 @@ class RoutineService(
         jdbc.sql("SELECT task_id, label, icon_key FROM revision_task WHERE revision_id = ? ORDER BY position")
             .param(revisionId)
             .query { rs, _ -> Triple(rs.getLong("task_id"), rs.getString("label"), rs.getString("icon_key")) }.list()
-
-    /** I-3: the edit removed the last unfinished task, so the sticker is earned now. Runs inside the child lock. */
-    private fun earnIfComplete(childId: Long, routineId: Long, today: LocalDate): StickerPickDto? {
-        val planned = planQuery.plannedRoutine(routineId, today)
-        if (planned == null || planned.skipped) return null
-        val done =
-            jdbc.sql("SELECT task_id FROM task_completion WHERE routine_id = ? AND chart_date = ?").params(routineId, today)
-                .query(Long::class.java).list().toSet()
-        if (!planned.tasks.all { it.taskId in done }) return null
-        val hasLive =
-            jdbc.sql("SELECT COUNT(*) FROM live_sticker WHERE routine_id = ? AND chart_date = ?").params(routineId, today)
-                .query(Long::class.java).single() > 0
-        if (hasLive) return null
-        return earner.earn(childId, routineId, today, planned.name, planned.iconKey)
-    }
 
     private fun dtos(where: String, scope: Long): List<RoutineDto> {
         val today = familyClock.today()

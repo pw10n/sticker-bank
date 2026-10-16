@@ -22,7 +22,17 @@ class PastDayFixFlowIT : FlowTestBase() {
             .andExpect(status().isConflict).andExpect(jsonPath("$.code").value("DAY_CHANGED"))
         assertThat(count("SELECT COUNT(*) FROM sticker WHERE child_id = ?", childId)).isZero()
 
-        val finished = read(completeTask(childId, yesterday.toString(), routine.taskIds[1], parent).andExpect(status().isOk))
+        // checking the last task of a past day leaves the routine Ready to finish (FR-6.5, TDD 7.12): the day has
+        // already been settled, so it is not finished automatically
+        completeTask(childId, yesterday.toString(), routine.taskIds[1], parent).andExpect(status().isOk)
+            .andExpect(jsonPath("$.routine.state").value("READY_TO_FINISH"))
+            .andExpect(jsonPath("$.pick").doesNotExist())
+        assertThat(count("SELECT COUNT(*) FROM sticker WHERE child_id = ?", childId)).isZero()
+        // the child cannot finish it either
+        finishRoutine(childId, yesterday.toString(), routine.routineId)
+            .andExpect(status().isConflict).andExpect(jsonPath("$.code").value("DAY_CHANGED"))
+
+        val finished = read(finishRoutine(childId, yesterday.toString(), routine.routineId, parent).andExpect(status().isOk))
         val stickerId = long(finished, "$.pick.stickerId")
         assertThat(text(finished, "$.routine.state")).isEqualTo("AWAITING_PICK")
         assertThat(text(finished, "$.pick.chartDate")).isEqualTo("2026-10-14")

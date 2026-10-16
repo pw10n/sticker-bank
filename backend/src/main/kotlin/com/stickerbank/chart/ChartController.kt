@@ -5,6 +5,7 @@ import jakarta.validation.Valid
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
@@ -22,6 +23,10 @@ class ChartController(
     @PutMapping("/api/children/{childId}/days/{date}/tasks/{taskId}")
     fun complete(@PathVariable childId: Long, @PathVariable date: String, @PathVariable taskId: Long, actor: Actor): TaskToggleResultDto =
         completions.complete(childId, date, taskId, actor)
+
+    @PostMapping("/api/children/{childId}/days/{date}/routines/{routineId}/finish")
+    fun finish(@PathVariable childId: Long, @PathVariable date: String, @PathVariable routineId: Long, actor: Actor): TaskToggleResultDto =
+        completions.finish(childId, date, routineId, actor)
 
     @DeleteMapping("/api/children/{childId}/days/{date}/tasks/{taskId}")
     fun undo(

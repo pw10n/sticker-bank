@@ -252,6 +252,9 @@
       "ChartStickerDto" : {
         "additionalProperties" : false,
         "properties" : {
+          "autoFinished" : {
+            "type" : [ "boolean", "null" ]
+          },
           "design" : {
             "oneOf" : [ {
               "$ref" : "#/components/schemas/DesignRefDto"
@@ -274,7 +277,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "design", "prizeRequestId", "revocable", "status", "stickerId" ],
+        "required" : [ "autoFinished", "design", "prizeRequestId", "revocable", "status", "stickerId" ],
         "type" : "object"
       },
       "ChartTaskDto" : {
@@ -485,7 +488,7 @@
         "type" : "object"
       },
       "ErrorCode" : {
-        "enum" : [ "VALIDATION_FAILED", "PARENT_SESSION_REQUIRED", "PIN_INCORRECT", "PIN_LOCKED", "PIN_NOT_SET", "PIN_ALREADY_SET", "DAY_CHANGED", "FUTURE_DATE", "ROUTINE_NOT_SCHEDULED", "ROUTINE_LOCKED", "ALREADY_CLAIMED", "CHOICE_NOT_OFFERED", "PENDING_REQUEST_EXISTS", "STICKER_NOT_AVAILABLE", "REQUEST_NOT_PENDING", "REQUEST_NOT_COMPLETED", "DESIGN_IN_USE", "STICKER_USED", "REVOKE_CONFIRMATION_REQUIRED", "STICKER_REVOKED", "NOT_FOUND", "CSRF_HEADER_MISSING" ],
+        "enum" : [ "VALIDATION_FAILED", "PARENT_SESSION_REQUIRED", "PIN_INCORRECT", "PIN_LOCKED", "PIN_NOT_SET", "PIN_ALREADY_SET", "DAY_CHANGED", "FUTURE_DATE", "ROUTINE_NOT_SCHEDULED", "ROUTINE_NOT_READY", "ROUTINE_LOCKED", "ALREADY_CLAIMED", "CHOICE_NOT_OFFERED", "PENDING_REQUEST_EXISTS", "STICKER_NOT_AVAILABLE", "REQUEST_NOT_PENDING", "REQUEST_NOT_COMPLETED", "DESIGN_IN_USE", "STICKER_USED", "REVOKE_CONFIRMATION_REQUIRED", "STICKER_REVOKED", "NOT_FOUND", "CSRF_HEADER_MISSING" ],
         "type" : "string"
       },
       "FieldErrorDto" : {
@@ -552,6 +555,9 @@
       "HistoryRoutineDto" : {
         "additionalProperties" : false,
         "properties" : {
+          "autoFinished" : {
+            "type" : "boolean"
+          },
           "doneCount" : {
             "format" : "int32",
             "type" : "integer"
@@ -578,7 +584,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "doneCount", "iconKey", "name", "routineId", "state", "stickerId", "taskCount" ],
+        "required" : [ "autoFinished", "doneCount", "iconKey", "name", "routineId", "state", "stickerId", "taskCount" ],
         "type" : "object"
       },
       "LibraryDto" : {
@@ -1001,7 +1007,7 @@
         "type" : "object"
       },
       "RoutineDayState" : {
-        "enum" : [ "NOT_STARTED", "IN_PROGRESS", "AWAITING_PICK", "EARNED", "MISSED", "SKIPPED" ],
+        "enum" : [ "NOT_STARTED", "IN_PROGRESS", "READY_TO_FINISH", "AWAITING_PICK", "EARNED", "MISSED", "SKIPPED" ],
         "type" : "string"
       },
       "RoutineDeleteResultDto" : {
@@ -1130,13 +1136,6 @@
           "appliesFromTomorrow" : {
             "type" : "boolean"
           },
-          "earnedPick" : {
-            "oneOf" : [ {
-              "$ref" : "#/components/schemas/StickerPickDto"
-            }, {
-              "type" : "null"
-            } ]
-          },
           "effectiveFrom" : {
             "format" : "date",
             "type" : "string"
@@ -1145,7 +1144,7 @@
             "$ref" : "#/components/schemas/RoutineDto"
           }
         },
-        "required" : [ "appliesFromTomorrow", "earnedPick", "effectiveFrom", "routine" ],
+        "required" : [ "appliesFromTomorrow", "effectiveFrom", "routine" ],
         "type" : "object"
       },
       "SettingsDto" : {
@@ -1538,6 +1537,64 @@
           }
         },
         "summary" : "Daily chart for a child",
+        "tags" : [ "chart" ]
+      }
+    },
+    "/api/children/{childId}/days/{date}/routines/{routineId}/finish" : {
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "finishRoutine",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "description" : "YYYY-MM-DD or the literal 'today'",
+          "in" : "path",
+          "name" : "date",
+          "required" : true,
+          "schema" : {
+            "pattern" : "^(\\d{4}-\\d{2}-\\d{2}|today)$",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "routineId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TaskToggleResultDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          },
+          "422" : {
+            "$ref" : "#/components/responses/Problem422"
+          }
+        },
+        "summary" : "I'm Done!: finish a routine whose tasks are all done and earn its sticker",
         "tags" : [ "chart" ]
       }
     },

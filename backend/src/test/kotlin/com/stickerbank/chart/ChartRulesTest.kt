@@ -6,14 +6,16 @@ import com.stickerbank.common.StickerStatus
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 class ChartRulesTest {
     private val today = LocalDate.of(2026, 10, 15)
     private val yesterday = today.minusDays(1)
 
-    private fun state(skipped: Boolean = false, sticker: StickerStatus? = null, date: LocalDate = today, done: Int = 0) =
-        ChartRules.deriveState(skipped, sticker, date, today, done)
+    private fun state(skipped: Boolean = false, sticker: StickerStatus? = null, date: LocalDate = today, done: Int = 0, count: Int = 2) =
+        ChartRules.deriveState(skipped, sticker, date, today, done, count)
 
     @Test
     fun `state table`() {
@@ -25,6 +27,49 @@ class ChartRulesTest {
         assertThat(state(date = yesterday)).isEqualTo(RoutineDayState.MISSED)
         assertThat(state(date = yesterday, done = 1)).isEqualTo(RoutineDayState.MISSED)
         assertThat(state(skipped = true)).isEqualTo(RoutineDayState.SKIPPED)
+    }
+
+    @Test
+    fun `every task done without a sticker is ready to finish and earns nothing yet`() {
+        assertThat(state(done = 2)).isEqualTo(RoutineDayState.READY_TO_FINISH)
+        assertThat(state(done = 1, count = 1)).isEqualTo(RoutineDayState.READY_TO_FINISH)
+        // a past day only gets here after a parent checked the last task there (TDD 7.3, 7.12)
+        assertThat(state(date = yesterday, done = 2)).isEqualTo(RoutineDayState.READY_TO_FINISH)
+        // one task short is still in progress today and missed on a past day
+        assertThat(state(done = 1)).isEqualTo(RoutineDayState.IN_PROGRESS)
+        assertThat(state(date = yesterday, done = 1)).isEqualTo(RoutineDayState.MISSED)
+    }
+
+    @Test
+    fun `ready to finish yields to a skip and to any live sticker`() {
+        assertThat(state(skipped = true, done = 2)).isEqualTo(RoutineDayState.SKIPPED)
+        assertThat(state(sticker = StickerStatus.UNCLAIMED, done = 2)).isEqualTo(RoutineDayState.AWAITING_PICK)
+        assertThat(state(sticker = StickerStatus.AVAILABLE, done = 2)).isEqualTo(RoutineDayState.EARNED)
+    }
+
+    @Test
+    fun `a revoked sticker leaves the routine ready to finish only once every task is done again`() {
+        // the revoke unchecked a task, so the routine is back in progress today and missed on a past day
+        assertThat(state(done = 1)).isEqualTo(RoutineDayState.IN_PROGRESS)
+        assertThat(state(date = yesterday, done = 1)).isEqualTo(RoutineDayState.MISSED)
+        assertThat(state(done = 2)).isEqualTo(RoutineDayState.READY_TO_FINISH)
+    }
+
+    @Test
+    fun `end of day is the start of the next day in the family zone`() {
+        val utc = ZoneId.of("UTC")
+        assertThat(ChartRules.endOfDay(LocalDate.of(2026, 10, 15), utc)).isEqualTo(Instant.parse("2026-10-16T00:00:00Z"))
+        val la = ZoneId.of("America/Los_Angeles")
+        assertThat(ChartRules.endOfDay(LocalDate.of(2026, 10, 15), la)).isEqualTo(Instant.parse("2026-10-16T07:00:00Z"))
+    }
+
+    @Test
+    fun `end of day follows daylight saving changes`() {
+        val la = ZoneId.of("America/Los_Angeles")
+        // 2026-11-01 is 25 hours long in Los Angeles (clocks go back), so its end is 08:00Z the next day
+        assertThat(ChartRules.endOfDay(LocalDate.of(2026, 11, 1), la)).isEqualTo(Instant.parse("2026-11-02T08:00:00Z"))
+        // 2026-03-08 is 23 hours long (clocks go forward), so its end is 07:00Z the next day
+        assertThat(ChartRules.endOfDay(LocalDate.of(2026, 3, 8), la)).isEqualTo(Instant.parse("2026-03-09T07:00:00Z"))
     }
 
     @Test

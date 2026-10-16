@@ -1,5 +1,6 @@
 package com.stickerbank.support
 
+import com.stickerbank.common.FinishMode
 import com.stickerbank.common.ParentSessionCookie
 import com.stickerbank.common.StickerStatus
 import com.stickerbank.common.Weekdays
@@ -91,13 +92,14 @@ class Fixtures(private val jdbc: JdbcClient, private val clock: Clock) {
         prizeRequestId: Long? = null,
         routineName: String? = "Morning Routine",
         routineIconKey: String? = "sun",
+        finishMode: FinishMode? = null,
     ): Long {
         val now = now()
         return insert(
             "INSERT INTO sticker (child_id, source, routine_id, chart_date, routine_name, routine_icon_key, design_id, status, " +
-                "prize_request_id, earned_at, claimed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "prize_request_id, earned_at, claimed_at, finish_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             childId, if (routineId == null) "BONUS" else "ROUTINE", routineId, chartDate, routineName, routineIconKey,
-            designId, status.name, prizeRequestId, now, if (designId != null) now else null,
+            designId, status.name, prizeRequestId, now, if (designId != null) now else null, finishMode?.name,
         )
     }
 

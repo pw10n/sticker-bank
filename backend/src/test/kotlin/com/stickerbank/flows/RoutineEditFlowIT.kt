@@ -15,6 +15,7 @@ class RoutineEditFlowIT : FlowTestBase() {
         val childId = createChildViaApi(parent)
         val routine = createRoutineViaApi(parent, childId, "Morning Routine")
         routine.taskIds.forEach { completeTask(childId, "today", it).andExpect(status().isOk) }
+        finishRoutine(childId, "today", routine.id).andExpect(status().isOk)
 
         val body =
             """{"name":"Renamed Routine","iconKey":"sun","color":null,"tasks":[""" +
@@ -24,7 +25,6 @@ class RoutineEditFlowIT : FlowTestBase() {
         send("PUT", "/api/parent/routines/${routine.id}", body, parent).andExpect(status().isOk)
             .andExpect(jsonPath("$.appliesFromTomorrow").value(true))
             .andExpect(jsonPath("$.effectiveFrom").value("2026-10-16"))
-            .andExpect(jsonPath("$.earnedPick").doesNotExist())
 
         fetch("/api/children/$childId/days/today").andExpect(status().isOk)
             .andExpect(jsonPath("$.routines[0].name").value("Morning Routine"))
@@ -40,7 +40,7 @@ class RoutineEditFlowIT : FlowTestBase() {
     }
 
     @Test
-    fun `removing the last unfinished task earns the sticker (I-3)`() {
+    fun `removing the last unfinished task makes the routine ready to finish but earns nothing (I-3)`() {
         val parent = setupParent()
         val childId = createChildViaApi(parent)
         val routine = createRoutineViaApi(parent, childId)
@@ -48,16 +48,17 @@ class RoutineEditFlowIT : FlowTestBase() {
 
         val body = """{"name":"Morning Routine","iconKey":"sun","color":null,"tasks":[""" +
             """{"id":${routine.taskIds[0]},"label":"Brush teeth","iconKey":"toothbrush"}]}"""
-        val saved = read(
-            send("PUT", "/api/parent/routines/${routine.id}", body, parent).andExpect(status().isOk)
-                .andExpect(jsonPath("$.appliesFromTomorrow").value(false))
-                .andExpect(jsonPath("$.earnedPick").isNotEmpty),
-        )
-        val stickerId = long(saved, "$.earnedPick.stickerId")
-        assertThat(longs(saved, "$.earnedPick.choices[*].designId")).hasSize(3).doesNotHaveDuplicates()
-        assertThat(count("SELECT COUNT(*) FROM sticker WHERE routine_id = ?", routine.id)).isEqualTo(1)
+        send("PUT", "/api/parent/routines/${routine.id}", body, parent).andExpect(status().isOk)
+            .andExpect(jsonPath("$.appliesFromTomorrow").value(false))
+            .andExpect(jsonPath("$.earnedPick").doesNotExist())
+        // BR-18: saving a routine never earns. The routine is only Ready to finish.
+        assertThat(count("SELECT COUNT(*) FROM sticker WHERE routine_id = ?", routine.id)).isZero()
+        fetch("/api/children/$childId/days/today").andExpect(jsonPath("$.routines[0].state").value("READY_TO_FINISH"))
+            .andExpect(jsonPath("$.routines[0].sticker").doesNotExist())
 
-        fetch("/api/children/$childId/days/today").andExpect(jsonPath("$.routines[0].state").value("AWAITING_PICK"))
-            .andExpect(jsonPath("$.routines[0].sticker.stickerId").value(stickerId))
+        // I'm Done! earns it
+        val finished = read(finishRoutine(childId, "today", routine.id).andExpect(status().isOk))
+        assertThat(longs(finished, "$.pick.choices[*].designId")).hasSize(3).doesNotHaveDuplicates()
+        assertThat(count("SELECT COUNT(*) FROM sticker WHERE routine_id = ?", routine.id)).isEqualTo(1)
     }
 }

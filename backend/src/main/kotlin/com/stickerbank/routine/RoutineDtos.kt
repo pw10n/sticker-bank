@@ -1,6 +1,5 @@
 package com.stickerbank.routine
 
-import com.stickerbank.common.StickerPickDto
 import com.stickerbank.common.Weekday
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.Valid
@@ -41,12 +40,7 @@ data class RoutineDto(
     val upcomingSkips: List<LocalDate>,
 )
 
-data class RoutineSaveResultDto(
-    val routine: RoutineDto,
-    val effectiveFrom: LocalDate,
-    val appliesFromTomorrow: Boolean,
-    val earnedPick: StickerPickDto?,
-)
+data class RoutineSaveResultDto(val routine: RoutineDto, val effectiveFrom: LocalDate, val appliesFromTomorrow: Boolean)
 
 data class RoutineDeleteResultDto(val routineId: Long, val effectiveFrom: LocalDate)
 

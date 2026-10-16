@@ -160,8 +160,12 @@ class RevocationIT : FlowTestBase() {
         val first = seedSticker(today, StickerStatus.AVAILABLE)
         revoke("today", r.taskIds[1]).andExpect(status().isOk)
 
+        // the last task only makes the routine Ready to finish. I'm Done! earns the new sticker (FR-12.5).
+        completeTask(childId, "today", r.taskIds[1]).andExpect(status().isOk)
+            .andExpect(jsonPath("$.routine.state").value("READY_TO_FINISH"))
+            .andExpect(jsonPath("$.pick").doesNotExist())
         val body = read(
-            completeTask(childId, "today", r.taskIds[1]).andExpect(status().isOk)
+            finishRoutine(childId, "today", r.routineId).andExpect(status().isOk)
                 .andExpect(jsonPath("$.routine.state").value("AWAITING_PICK"))
                 .andExpect(jsonPath("$.pick.choices.length()").value(3)),
         )
@@ -301,7 +305,9 @@ class RevocationIT : FlowTestBase() {
     fun `completing is not blocked by a revoked row`() {
         val old = seedRevokedRow(today)
         completeTask(childId, "today", r.taskIds[0]).andExpect(status().isOk)
-        completeTask(childId, "today", r.taskIds[1]).andExpect(status().isOk).andExpect(jsonPath("$.pick.stickerId").isNumber)
+        completeTask(childId, "today", r.taskIds[1]).andExpect(status().isOk)
+            .andExpect(jsonPath("$.routine.state").value("READY_TO_FINISH"))
+        finishRoutine(childId, "today", r.routineId).andExpect(status().isOk).andExpect(jsonPath("$.pick.stickerId").isNumber)
         assertThat(liveCount()).isEqualTo(1)
         assertThat(stickerStatus(old)).isEqualTo("REVOKED")
     }
@@ -333,13 +339,16 @@ class RevocationIT : FlowTestBase() {
     }
 
     @Test
-    fun `earn on edit works after a revoke`() {
+    fun `an edit that leaves every task done after a revoke makes the routine ready to finish and earns nothing`() {
         seedRevokedRow(today)
         fixtures.completeTask(childId, r.routineId, r.taskIds[0], today)
         val body = """{"name":"Morning Routine","iconKey":"sun","color":null,"days":null,"paused":false,
             "tasks":[{"id":${r.taskIds[0]},"label":"Brush teeth","iconKey":"toothbrush"}]}"""
         send("PUT", "/api/parent/routines/${r.routineId}", body, cookie).andExpect(status().isOk)
-            .andExpect(jsonPath("$.earnedPick.stickerId").isNumber)
+            .andExpect(jsonPath("$.earnedPick").doesNotExist())
+        assertThat(liveCount()).isZero()
+        chart().andExpect(jsonPath("$.routines[0].state").value("READY_TO_FINISH"))
+        finishRoutine(childId, "today", r.routineId).andExpect(status().isOk)
         assertThat(liveCount()).isEqualTo(1)
     }
 

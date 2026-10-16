@@ -22,7 +22,14 @@ class FirstRunFlowIT : FlowTestBase() {
         completeTask(childId, "today", routine.taskIds[0]).andExpect(status().isOk)
             .andExpect(jsonPath("$.routine.state").value("IN_PROGRESS"))
             .andExpect(jsonPath("$.pick").doesNotExist())
-        val second = read(completeTask(childId, "today", routine.taskIds[1]).andExpect(status().isOk))
+        // FR-6.6: checking the last task only makes the routine Ready to finish. Nothing is earned yet.
+        completeTask(childId, "today", routine.taskIds[1]).andExpect(status().isOk)
+            .andExpect(jsonPath("$.routine.state").value("READY_TO_FINISH"))
+            .andExpect(jsonPath("$.pick").doesNotExist())
+        assertThat(count("SELECT COUNT(*) FROM sticker WHERE child_id = ?", childId)).isZero()
+
+        // FR-6.8: I'm Done! earns the sticker and opens the pick
+        val second = read(finishRoutine(childId, "today", routine.id).andExpect(status().isOk))
         assertThat(text(second, "$.routine.state")).isEqualTo("AWAITING_PICK")
         val stickerId = long(second, "$.pick.stickerId")
         val choices = longs(second, "$.pick.choices[*].designId")

@@ -1,6 +1,7 @@
 package com.stickerbank.sticker.earning
 
 import com.stickerbank.common.ChildLock
+import com.stickerbank.common.FinishMode
 import com.stickerbank.common.StickerEarner
 import com.stickerbank.common.StickerPickDto
 import com.stickerbank.common.StickerStatus
@@ -55,7 +56,7 @@ class StickerEarningIT {
     }
 
     private fun earn(day: LocalDate = date, routine: Long = routineId): StickerPickDto =
-        childLock.withChildLock(childId) { earner.earn(childId, routine, day, "Morning Routine", "sun") }
+        childLock.withChildLock(childId) { earner.earn(childId, routine, day, "Morning Routine", "sun", FinishMode.TAPPED) }
 
     private fun claim(stickerId: Long, designId: Long) = post("/api/stickers/$stickerId/pick").header("X-Sticker-Bank", "1")
         .contentType(MediaType.APPLICATION_JSON).content("""{"designId": $designId}""")

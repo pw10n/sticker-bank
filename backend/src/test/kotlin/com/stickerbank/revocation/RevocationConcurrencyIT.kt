@@ -51,9 +51,11 @@ class RevocationConcurrencyIT : FlowTestBase() {
         return World(cookie, childId, r.routineId, r.taskIds)
     }
 
+    /** Checks every task and taps I'm Done! as the child, which is the only way to earn the sticker (FR-6.8). */
     private fun World.earn(): Long {
         completeTask(childId, "today", taskIds[0]).andReturn()
-        return long(read(completeTask(childId, "today", taskIds[1])), "$.pick.stickerId")
+        completeTask(childId, "today", taskIds[1]).andReturn()
+        return long(read(finishRoutine(childId, "today", routineId)), "$.pick.stickerId")
     }
 
     private fun World.revoke() = send("DELETE", "/api/children/$childId/days/today/tasks/${taskIds[1]}?revokeSticker=true", null, cookie)
@@ -119,21 +121,30 @@ class RevocationConcurrencyIT : FlowTestBase() {
     fun `revoke versus the child finishing the routine again`() {
         val w = world()
         val first = w.earn()
-        val (revoke, tap) = race({ status(w.revoke()) }, { status(completeTask(w.childId, "today", w.taskIds[1])) })
+        // the child's side is two requests in a row: tap the task again, then tap I'm Done!
+        val (revoke, tap) = race(
+            { status(w.revoke()) },
+            {
+                val checked = status(completeTask(w.childId, "today", w.taskIds[1]))
+                checked to status(finishRoutine(w.childId, "today", w.routineId))
+            },
+        )
 
         assertThat(revoke).isEqualTo(200)
-        assertThat(tap).isEqualTo(200)
+        assertThat(tap.first).isEqualTo(200)
+        // I'm Done! is refused (409 ROUTINE_NOT_READY) when the revoke unchecked the task after the tap was a no-op
+        assertThat(tap.second).isIn(200, 409)
         w.assertAtMostOneLive()
         val total = count("SELECT COUNT(*) FROM sticker WHERE routine_id = ?", w.routineId)
         val live = count("SELECT COUNT(*) FROM live_sticker WHERE routine_id = ?", w.routineId)
         val completions = count("SELECT COUNT(*) FROM task_completion WHERE routine_id = ?", w.routineId)
         assertThat(count("SELECT COUNT(*) FROM sticker WHERE id = ? AND status = 'REVOKED'", first)).isEqualTo(1)
         if (live == 0L) {
-            // tap first (no-op on the locked routine), then revoke
+            // the tap was a no-op on the locked routine and the revoke came before I'm Done!, or after it
             assertThat(total).isEqualTo(1)
             assertThat(completions).isEqualTo(1)
         } else {
-            // revoke first, then the tap earned a new sticker
+            // revoke first, then the tap and I'm Done! earned a new sticker
             assertThat(total).isEqualTo(2)
             assertThat(completions).isEqualTo(2)
         }

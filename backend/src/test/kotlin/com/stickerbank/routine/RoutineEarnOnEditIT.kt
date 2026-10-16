@@ -11,13 +11,14 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.Instant
 import java.time.LocalDate
 
-/** I-3: removing the last unfinished task earns the sticker right away. */
+/** I-3 / BR-18: removing the last unfinished task only makes the routine Ready to finish. Saving never earns. */
 @IntegrationTest
 class RoutineEarnOnEditIT {
     @Autowired lateinit var mvc: MockMvc
@@ -39,8 +40,11 @@ class RoutineEarnOnEditIT {
         fixtures.setPin()
     }
 
+    private fun stickerRows(routineId: Long) = jdbc.sql("SELECT COUNT(*) FROM sticker WHERE routine_id = ? AND chart_date = ?")
+        .param(routineId).param(today).query(Long::class.java).single()
+
     @Test
-    fun `removing the unfinished task earns the sticker and returns the pick`() {
+    fun `removing the unfinished task makes the routine ready to finish and earns nothing`() {
         val cookie = fixtures.parentCookie(fixtures.createParentSession())
         val childId = fixtures.createChild()
         val routine = fixtures.createRoutine(childId, tasks = listOf("Brush teeth" to "bathtub", "Get dressed" to "bathtub"))
@@ -53,12 +57,38 @@ class RoutineEarnOnEditIT {
             put("/api/parent/routines/${routine.routineId}").cookie(cookie).header("X-Sticker-Bank", "1")
                 .contentType(MediaType.APPLICATION_JSON).content(body),
         ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.earnedPick.stickerId").isNumber)
-            .andExpect(jsonPath("$.earnedPick.choices").isNotEmpty)
+            .andExpect(jsonPath("$.earnedPick").doesNotExist())
             .andExpect(jsonPath("$.appliesFromTomorrow").value(false))
 
-        val rows = jdbc.sql("SELECT COUNT(*) FROM sticker WHERE routine_id = ? AND chart_date = ?")
-            .param(routine.routineId).param(today).query(Long::class.java).single()
-        assertThat(rows).isEqualTo(1L)
+        assertThat(stickerRows(routine.routineId)).isZero()
+        mvc.perform(get("/api/children/$childId/days/today"))
+            .andExpect(jsonPath("$.routines[0].state").value("READY_TO_FINISH"))
+            .andExpect(jsonPath("$.routines[0].taskCount").value(1))
+            .andExpect(jsonPath("$.routines[0].sticker").doesNotExist())
+    }
+
+    @Test
+    fun `adding a task to a routine that is ready to finish puts it back in progress`() {
+        val cookie = fixtures.parentCookie(fixtures.createParentSession())
+        val childId = fixtures.createChild()
+        val routine = fixtures.createRoutine(childId, tasks = listOf("Brush teeth" to "bathtub"))
+        fixtures.completeTask(childId, routine.routineId, routine.taskIds[0], today)
+        mvc.perform(get("/api/children/$childId/days/today"))
+            .andExpect(jsonPath("$.routines[0].state").value("READY_TO_FINISH"))
+
+        val body =
+            """{"name":"Morning Routine","iconKey":"crescent-moon","color":null,"days":null,"paused":false,
+               "tasks":[{"id":${routine.taskIds[0]},"label":"Brush teeth","iconKey":"bathtub"},
+                        {"label":"Get dressed","iconKey":"bathtub"}]}"""
+        mvc.perform(
+            put("/api/parent/routines/${routine.routineId}").cookie(cookie).header("X-Sticker-Bank", "1")
+                .contentType(MediaType.APPLICATION_JSON).content(body),
+        ).andExpect(status().isOk).andExpect(jsonPath("$.appliesFromTomorrow").value(false))
+
+        mvc.perform(get("/api/children/$childId/days/today"))
+            .andExpect(jsonPath("$.routines[0].state").value("IN_PROGRESS"))
+            .andExpect(jsonPath("$.routines[0].doneCount").value(1))
+            .andExpect(jsonPath("$.routines[0].taskCount").value(2))
+        assertThat(stickerRows(routine.routineId)).isZero()
     }
 }

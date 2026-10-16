@@ -4,7 +4,9 @@ import com.stickerbank.common.DomainException
 import com.stickerbank.common.ErrorCode
 import com.stickerbank.common.FieldErrorDto
 import com.stickerbank.common.StickerStatus
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoUnit
 
@@ -12,15 +14,29 @@ import java.time.temporal.ChronoUnit
 object ChartRules {
     const val MAX_HISTORY_DAYS = 62L
 
-    fun deriveState(skipped: Boolean, stickerStatus: StickerStatus?, date: LocalDate, today: LocalDate, doneCount: Int): RoutineDayState =
-        when {
-            skipped -> RoutineDayState.SKIPPED
-            stickerStatus == StickerStatus.UNCLAIMED -> RoutineDayState.AWAITING_PICK
-            stickerStatus != null -> RoutineDayState.EARNED
-            date.isBefore(today) -> RoutineDayState.MISSED
-            doneCount > 0 -> RoutineDayState.IN_PROGRESS
-            else -> RoutineDayState.NOT_STARTED
-        }
+    /**
+     * First matching row wins. READY_TO_FINISH is derived, never stored (TD-18): no live sticker and every task done.
+     * A routine on a chart always has at least one task (FR-3.5), so [taskCount] is only guarded for safety.
+     */
+    fun deriveState(
+        skipped: Boolean,
+        stickerStatus: StickerStatus?,
+        date: LocalDate,
+        today: LocalDate,
+        doneCount: Int,
+        taskCount: Int,
+    ): RoutineDayState = when {
+        skipped -> RoutineDayState.SKIPPED
+        stickerStatus == StickerStatus.UNCLAIMED -> RoutineDayState.AWAITING_PICK
+        stickerStatus != null -> RoutineDayState.EARNED
+        taskCount > 0 && doneCount >= taskCount -> RoutineDayState.READY_TO_FINISH
+        date.isBefore(today) -> RoutineDayState.MISSED
+        doneCount > 0 -> RoutineDayState.IN_PROGRESS
+        else -> RoutineDayState.NOT_STARTED
+    }
+
+    /** The instant a family-local day ends (TDD 7.12): the start of the next day, so DST days are handled. */
+    fun endOfDay(date: LocalDate, zone: ZoneId): Instant = date.plusDays(1).atStartOfDay(zone).toInstant()
 
     /** Counts only completions of tasks that belong to the day's revision. */
     fun doneCount(plannedTaskIds: Collection<Long>, completedTaskIds: Set<Long>): Int = plannedTaskIds.count { it in completedTaskIds }

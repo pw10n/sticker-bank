@@ -1,6 +1,7 @@
 package com.stickerbank.chart
 
 import com.stickerbank.common.DesignRefDto
+import com.stickerbank.common.FinishMode
 import com.stickerbank.common.StickerStatus
 import com.stickerbank.routine.PlannedRoutine
 import org.springframework.jdbc.core.simple.JdbcClient
@@ -15,6 +16,8 @@ data class ChartStickerRow(
     val status: StickerStatus,
     val design: DesignRefDto?,
     val prizeRequestId: Long? = null,
+    /** NULL for stickers earned before V5 and for bonus stickers. */
+    val finishMode: FinishMode? = null,
 )
 
 @Component
@@ -31,7 +34,7 @@ class ChartQueries(private val jdbc: JdbcClient) {
 
     /** Routine stickers of the child in the range, keyed by (routineId, date), one query. */
     fun stickers(childId: Long, from: LocalDate, to: LocalDate): Map<Pair<Long, LocalDate>, ChartStickerRow> = jdbc.sql(
-        "SELECT s.id, s.routine_id, s.chart_date, s.status, s.prize_request_id, d.id AS design_id, d.name, d.artwork_key " +
+        "SELECT s.id, s.routine_id, s.chart_date, s.status, s.prize_request_id, s.finish_mode, d.id AS design_id, d.name, d.artwork_key " +
             "FROM live_sticker s " +
             "LEFT JOIN sticker_design d ON d.id = s.design_id " +
             "WHERE s.child_id = ? AND s.routine_id IS NOT NULL AND s.chart_date BETWEEN ? AND ?",
@@ -44,6 +47,7 @@ class ChartQueries(private val jdbc: JdbcClient) {
             status = StickerStatus.valueOf(rs.getString("status")),
             design = designId?.let { DesignRefDto(it.toLong(), rs.getString("name"), rs.getString("artwork_key")) },
             prizeRequestId = (rs.getObject("prize_request_id") as Number?)?.toLong(),
+            finishMode = rs.getString("finish_mode")?.let(FinishMode::valueOf),
         )
     }.list().associateBy { it.routineId to it.chartDate }
 
@@ -66,6 +70,7 @@ class ChartQueries(private val jdbc: JdbcClient) {
             row.design,
             if (parent) row.prizeRequestId else null,
             if (parent) row.status != StickerStatus.USED else null,
+            if (parent) row.finishMode == FinishMode.AUTO else null,
         )
 
         fun routineDto(
@@ -82,7 +87,7 @@ class ChartQueries(private val jdbc: JdbcClient) {
                 name = planned.name,
                 iconKey = planned.iconKey,
                 color = planned.color,
-                state = ChartRules.deriveState(planned.skipped, sticker?.status, date, today, done),
+                state = ChartRules.deriveState(planned.skipped, sticker?.status, date, today, done, planned.tasks.size),
                 doneCount = done,
                 taskCount = planned.tasks.size,
                 tasks = planned.tasks.map { ChartTaskDto(it.taskId, it.label, it.iconKey, it.taskId in completed) },

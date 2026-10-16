@@ -102,6 +102,10 @@ abstract class FlowTestBase {
     protected fun completeTask(childId: Long, date: String, taskId: Long, cookie: Cookie? = null): ResultActions =
         send("PUT", "/api/children/$childId/days/$date/tasks/$taskId", null, cookie)
 
+    /** I'm Done!: the only way a routine earns its sticker besides the day ending (FR-6.8, FR-6.10). */
+    protected fun finishRoutine(childId: Long, date: String, routineId: Long, cookie: Cookie? = null): ResultActions =
+        send("POST", "/api/children/$childId/days/$date/routines/$routineId/finish", null, cookie)
+
     protected fun claim(stickerId: Long, designId: Long): ResultActions =
         send("POST", "/api/stickers/$stickerId/pick", """{"designId":$designId}""")
 

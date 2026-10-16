@@ -178,7 +178,8 @@ private class DemoSeedRun(private val jdbc: JdbcClient, private val clock: Clock
                     forceFull || roll < 0.7 -> {
                         routine.tasks.forEachIndexed { i, task -> complete(childId, routine, task, i, date) }
                         if (!isJane && routine === bedtime && offset == 1) {
-                            unclaimedId = insertSticker(childId, routine, date, "UNCLAIMED", null, null)
+                            // The child never tapped I'm Done!, so the day's end earned it (FR-6.10): it waits in the tray.
+                            unclaimedId = insertSticker(childId, routine, date, "UNCLAIMED", null, null, finishMode = "AUTO")
                             val picks = designs.shuffled(random).take(3)
                             picks.forEachIndexed { i, designId ->
                                 jdbc.sql("INSERT INTO sticker_pick_choice (sticker_id, slot, design_id) VALUES (?, ?, ?)")
@@ -212,6 +213,10 @@ private class DemoSeedRun(private val jdbc: JdbcClient, private val clock: Clock
             linkStickers(pendingRequest, pending, "PENDING")
             val live = if (Weekdays.includes(morning.mask, today)) morning else bedtime
             live.tasks.take(2).forEachIndexed { i, task -> complete(childId, live, task, i, today) }
+        } else {
+            // Every task is done but I'm Done! has not been tapped: the routine is Ready to finish and has no sticker (FR-6.6).
+            val live = if (Weekdays.includes(morning.mask, today)) morning else bedtime
+            live.tasks.forEachIndexed { i, task -> complete(childId, live, task, i, today) }
         }
         check(isJane || unclaimedId != null) { "Expected an unclaimed demo sticker" }
     }
@@ -223,13 +228,20 @@ private class DemoSeedRun(private val jdbc: JdbcClient, private val clock: Clock
         status: String,
         designId: Long?,
         requestId: Long?,
+        finishMode: String = "TAPPED",
     ): Long {
-        val earned = utc(date, if (routine.evening) LocalTime.of(18, 45) else LocalTime.of(7, 30))
+        // an automatic finish is earned at the end of its day (TDD 7.12); a tapped one when the child tapped I'm Done!
+        val earned =
+            if (finishMode == "AUTO") {
+                utc(date.plusDays(1), LocalTime.MIDNIGHT)
+            } else {
+                utc(date, if (routine.evening) LocalTime.of(18, 45) else LocalTime.of(7, 30))
+            }
         return insert(
             "INSERT INTO sticker (child_id, source, routine_id, chart_date, routine_name, routine_icon_key, design_id, status, " +
-                "prize_request_id, earned_at, claimed_at) VALUES (?, 'ROUTINE', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "prize_request_id, earned_at, claimed_at, finish_mode) VALUES (?, 'ROUTINE', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             childId, routine.id, date, routine.name, routine.icon, designId, status, requestId, earned,
-            if (designId != null) earned.plus(Duration.ofMinutes(1)) else null,
+            if (designId != null) earned.plus(Duration.ofMinutes(1)) else null, finishMode,
         )
     }
 

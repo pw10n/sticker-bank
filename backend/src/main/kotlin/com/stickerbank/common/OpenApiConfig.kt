@@ -99,6 +99,7 @@ private val OPERATIONS: Map<String, OperationSpec> =
         GET|/api/children/{childId}/days/{date}|getDailyChart|chart|200|400,404,422|-|Daily chart for a child
         PUT|/api/children/{childId}/days/{date}/tasks/{taskId}|completeTask|chart|200|403,404,409,422|-|Complete a task
         DELETE|/api/children/{childId}/days/{date}/tasks/{taskId}|uncompleteTask|chart|200|400,403,404,409,422|-|Un-complete a task, or revoke its sticker (parent, revokeSticker=true)
+        POST|/api/children/{childId}/days/{date}/routines/{routineId}/finish|finishRoutine|chart|200|403,404,409,422|-|I'm Done!: finish a routine whose tasks are all done and earn its sticker
         GET|/api/stickers/{stickerId}/pick|getStickerPick|sticker|200|404|-|Get the pick (choices) for an earned sticker
         POST|/api/stickers/{stickerId}/pick|claimStickerPick|sticker|200|400,403,404,409,422|-|Claim one of the offered designs
         GET|/api/children/{childId}/stickers|getStickerBook|sticker|200|404|-|Sticker book page

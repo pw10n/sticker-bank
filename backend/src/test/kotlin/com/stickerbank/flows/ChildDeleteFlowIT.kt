@@ -47,11 +47,13 @@ class ChildDeleteFlowIT : FlowTestBase() {
 
         // the doomed child earns a routine sticker through the API, owns a spare one, and has a pending request
         doomedRoutine.taskIds.forEach { completeTask(doomed, "today", it).andExpect(status().isOk) }
+        finishRoutine(doomed, "today", doomedRoutine.routineId).andExpect(status().isOk)
         val spare = fixtures.createSticker(doomed, doomedRoutine.routineId, today.minusDays(1), StickerStatus.AVAILABLE, designs[0])
         send("POST", "/api/children/$doomed/prize-requests", """{"stickerIds":[$spare]}""").andExpect(status().isCreated)
 
         // the sibling has the same kinds of rows
         siblingRoutine.taskIds.forEach { completeTask(sibling, "today", it).andExpect(status().isOk) }
+        finishRoutine(sibling, "today", siblingRoutine.routineId).andExpect(status().isOk)
         val siblingSpare = fixtures.createSticker(
             sibling,
             siblingRoutine.routineId,

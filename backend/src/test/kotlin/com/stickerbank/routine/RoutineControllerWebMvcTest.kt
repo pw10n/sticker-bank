@@ -45,7 +45,7 @@ class RoutineControllerWebMvcTest {
 
     @Test
     fun `create returns 201`() {
-        every { service.create(2, any()) } returns RoutineSaveResultDto(dto, LocalDate.of(2026, 10, 15), false, null)
+        every { service.create(2, any()) } returns RoutineSaveResultDto(dto, LocalDate.of(2026, 10, 15), false)
         mvc.perform(createRequest())
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.routine.id").value(1))

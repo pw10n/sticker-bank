@@ -7,11 +7,23 @@ import org.junit.jupiter.api.Test
 @IntegrationTest
 class MigrationFlowIT : FlowTestBase() {
     @Test
-    fun `flyway applied V1 to V4 on an empty MySQL`() {
+    fun `flyway applied V1 to V5 on an empty MySQL`() {
         val versions =
             jdbc.sql("SELECT version FROM flyway_schema_history WHERE success = TRUE AND version IS NOT NULL ORDER BY installed_rank")
                 .query(String::class.java).list()
-        assertThat(versions).containsExactly("1", "2", "3", "4")
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5")
+    }
+
+    @Test
+    fun `V5 adds the finish columns and the live view exposes them`() {
+        val columns = { table: String ->
+            jdbc.sql("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?")
+                .param(table).query(String::class.java).list()
+        }
+        assertThat(columns("sticker")).contains("finish_mode")
+        assertThat(columns("child")).contains("settled_through")
+        // a SELECT * view is expanded when created, so V5 has to redefine it (TDD 6.8)
+        assertThat(columns("live_sticker")).contains("finish_mode")
     }
 
     @Test

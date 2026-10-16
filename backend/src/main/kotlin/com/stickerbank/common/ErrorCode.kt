@@ -12,6 +12,7 @@ enum class ErrorCode(val status: HttpStatus, val title: String) {
     DAY_CHANGED(HttpStatus.CONFLICT, "A new day has started"),
     FUTURE_DATE(HttpStatus.UNPROCESSABLE_ENTITY, "That day has not happened yet"),
     ROUTINE_NOT_SCHEDULED(HttpStatus.CONFLICT, "This routine is not scheduled for that day"),
+    ROUTINE_NOT_READY(HttpStatus.CONFLICT, "Some tasks in this routine are not done yet"),
     ROUTINE_LOCKED(HttpStatus.CONFLICT, "This routine is finished for today"),
     ALREADY_CLAIMED(HttpStatus.CONFLICT, "This sticker has already been picked"),
     CHOICE_NOT_OFFERED(HttpStatus.UNPROCESSABLE_ENTITY, "That sticker was not one of the choices"),

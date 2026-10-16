@@ -33,6 +33,28 @@ class DemoDataSeederIT {
     private fun zero(message: String, sql: String) = assertThat(count(sql)).describedAs(message).isZero()
 
     @Test
+    fun `demo data shows the finish step - an automatic sticker in the tray and a routine ready to finish`() {
+        assertThat(count("SELECT COUNT(*) FROM sticker WHERE status = 'UNCLAIMED' AND finish_mode = 'AUTO'")).isEqualTo(1)
+        assertThat(count("SELECT COUNT(*) FROM sticker WHERE status <> 'UNCLAIMED' AND finish_mode = 'AUTO'")).isZero()
+        // the second child has every task of one routine done today and no sticker for it yet
+        val today = java.time.LocalDate.ofInstant(clock.instant(), java.time.ZoneOffset.UTC)
+        val ready =
+            jdbc.sql(
+                """
+                SELECT COUNT(*) FROM (
+                  SELECT c.routine_id FROM task_completion c
+                   WHERE c.chart_date = ? AND c.child_id = (SELECT id FROM child ORDER BY position DESC LIMIT 1)
+                     AND NOT EXISTS (SELECT 1 FROM live_sticker s WHERE s.routine_id = c.routine_id AND s.chart_date = c.chart_date)
+                   GROUP BY c.routine_id
+                  HAVING COUNT(*) = (SELECT COUNT(*) FROM revision_task rt JOIN routine_revision rr ON rr.id = rt.revision_id
+                                      WHERE rr.routine_id = c.routine_id)
+                ) x
+                """.trimIndent(),
+            ).param(today).query(Int::class.java).single()
+        assertThat(ready).isEqualTo(1)
+    }
+
+    @Test
     fun `demo data satisfies all invariants`() {
         assertThat(count("SELECT COUNT(*) FROM child")).isEqualTo(2)
         assertThat(

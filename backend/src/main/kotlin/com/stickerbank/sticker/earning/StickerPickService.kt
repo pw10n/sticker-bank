@@ -4,6 +4,7 @@ import com.stickerbank.common.ChildLock
 import com.stickerbank.common.DesignRefDto
 import com.stickerbank.common.DomainException
 import com.stickerbank.common.ErrorCode
+import com.stickerbank.common.FinishMode
 import com.stickerbank.common.StickerEarner
 import com.stickerbank.common.StickerPickDto
 import com.stickerbank.common.StickerStatus
@@ -14,6 +15,7 @@ import org.springframework.jdbc.support.GeneratedKeyHolder
 import org.springframework.stereotype.Service
 import java.sql.ResultSet
 import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -31,13 +33,21 @@ class StickerPickService(
 
     private fun now(): LocalDateTime = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)
 
-    override fun earn(childId: Long, routineId: Long, chartDate: LocalDate, routineName: String, routineIconKey: String): StickerPickDto {
-        val now = now()
+    override fun earn(
+        childId: Long,
+        routineId: Long,
+        chartDate: LocalDate,
+        routineName: String,
+        routineIconKey: String,
+        finishMode: FinishMode,
+        earnedAt: Instant?,
+    ): StickerPickDto {
+        val now = earnedAt?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) } ?: now()
         val keys = GeneratedKeyHolder()
         jdbc.sql(
             "INSERT INTO sticker (child_id, source, routine_id, chart_date, routine_name, routine_icon_key, design_id, status, " +
-                "earned_at) VALUES (?, 'ROUTINE', ?, ?, ?, ?, NULL, 'UNCLAIMED', ?)",
-        ).params(childId, routineId, chartDate, routineName, routineIconKey, now).update(keys)
+                "earned_at, finish_mode) VALUES (?, 'ROUTINE', ?, ?, ?, ?, NULL, 'UNCLAIMED', ?, ?)",
+        ).params(childId, routineId, chartDate, routineName, routineIconKey, now, finishMode.name).update(keys)
         val stickerId = requireNotNull(keys.key).toLong()
 
         val pool = jdbc.sql(
@@ -80,11 +90,11 @@ class StickerPickService(
                 claimed = null,
             )
         }
-        log.info("sticker earned stickerId={} childId={} chartDate={}", stickerId, childId, chartDate)
+        log.info("sticker earned stickerId={} childId={} chartDate={} finishMode={}", stickerId, childId, chartDate, finishMode)
         return result
     }
 
-    fun getPick(stickerId: Long): StickerPickDto {
+    override fun getPick(stickerId: Long): StickerPickDto {
         val row = jdbc.sql(
             "SELECT s.id, s.child_id, s.chart_date, s.routine_name, s.status, s.design_id, d.is_fallback " +
                 "FROM sticker s LEFT JOIN sticker_design d ON d.id = s.design_id WHERE s.id = ?",

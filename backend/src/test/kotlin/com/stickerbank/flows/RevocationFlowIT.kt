@@ -17,7 +17,8 @@ class RevocationFlowIT : FlowTestBase() {
 
         // the child finishes the routine and claims the sticker
         completeTask(childId, "today", routine.taskIds[0]).andExpect(status().isOk)
-        val earned = read(completeTask(childId, "today", routine.taskIds[1]).andExpect(status().isOk))
+        completeTask(childId, "today", routine.taskIds[1]).andExpect(status().isOk)
+        val earned = read(finishRoutine(childId, "today", routine.id).andExpect(status().isOk))
         val firstSticker = long(earned, "$.pick.stickerId")
         claim(firstSticker, long(earned, "$.pick.choices[0].designId")).andExpect(status().isOk)
         fetch("/api/children/$childId/stickers").andExpect(jsonPath("$.counts.available").value(1))
@@ -39,8 +40,11 @@ class RevocationFlowIT : FlowTestBase() {
         fetch("/api/children/$childId/stickers").andExpect(jsonPath("$.items.length()").value(0))
             .andExpect(jsonPath("$.counts.available").value(0))
 
-        // the child taps the task again and earns a new sticker
-        val again = read(completeTask(childId, "today", routine.taskIds[1]).andExpect(status().isOk))
+        // the child taps the task again: the routine is only Ready to finish until I'm Done! (FR-12.5)
+        completeTask(childId, "today", routine.taskIds[1]).andExpect(status().isOk)
+            .andExpect(jsonPath("$.routine.state").value("READY_TO_FINISH"))
+            .andExpect(jsonPath("$.pick").doesNotExist())
+        val again = read(finishRoutine(childId, "today", routine.id).andExpect(status().isOk))
         val secondSticker = long(again, "$.pick.stickerId")
         assertThat(secondSticker).isNotEqualTo(firstSticker)
         assertThat(longs(again, "$.pick.choices[*].designId")).hasSize(3)
