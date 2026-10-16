@@ -64,7 +64,7 @@ Checking the last task of a routine does not earn the sticker. The routine becom
 
 ### Taking a sticker back (Parent Mode)
 
-Open History, pick a day (today or past), and tap **Uncheck** on a done task in a finished routine. The "Remove this sticker?" sheet takes an optional note; confirm with **Remove sticker**. The sticker is marked removed (kept in history, struck through in prize history) and taken out of a waiting prize request; a request left with no stickers is cancelled as "Cancelled: stickers removed". The routine reopens, and redoing the task earns a new sticker with fresh choices. Spent (Used) stickers can't be removed. Every removal, with its note, is listed in History. Child Mode can never uncheck a finished routine. Designs that were ever earned, even if later removed, can't be deleted from the library, only retired.
+Open History, pick a day (today or past), and tap **Uncheck** on a done task in a finished routine. The "Remove this sticker?" sheet takes an optional note; confirm with **Remove sticker**. The sticker is marked removed (kept in history, struck through in prize history) and taken out of a waiting prize request; a request left with no stickers is cancelled as "Cancelled: stickers removed". The routine reopens, and finishing it again earns a new sticker with the same three choices as before, whether or not the child had already picked one. Spent (Used) stickers can't be removed. Every removal, with its note, is listed in History. Child Mode can never uncheck a finished routine. Designs that were ever earned or offered in a pick, even if the sticker was later removed, can't be deleted from the library, only retired.
 
 ## Configuration
 

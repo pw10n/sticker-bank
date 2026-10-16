@@ -4,10 +4,10 @@
 |---|---|
 | **Product** | Sticker Bank: a sticker / reward chart for young children |
 | **Document** | Technical Design Document |
-| **Version** | 0.4 |
+| **Version** | 0.5 |
 | **Status** | Draft |
 | **Date** | 2026-10-15 |
-| **Implements** | [Functional Design Document v1.2](FDD.md) |
+| **Implements** | [Functional Design Document v1.3](FDD.md) |
 
 > **Scope note:** This document covers **how** Sticker Bank is built: architecture, data storage, APIs, frontend, security, and deployment. **What** the app does is defined in the FDD. Requirement IDs (FR-x.y, BR-x, A-x, D-x) refer to it. Where the FDD is silent and a technical choice fills the gap, the choice is listed in §16.
 
@@ -19,6 +19,7 @@
 | 0.2 | 2026-10-15 | Local development with no database server to run: Testcontainers dev mode for full-stack work, an MSW mock-API mode for UI work (TD-16, §12.5). SQLite and H2 considered and rejected. |
 | 0.3 | 2026-10-15 | Sticker revocation from FDD v1.1 (§6.12): `REVOKED` sticker status with a live-only unique key, `sticker_revocation` log, `V4` migration, revoke via a confirmed parent undo (§7.11), new error codes, Parent Mode confirm sheet (TD-17, I-16 to I-20). |
 | 0.4 | 2026-10-15 | I'm Done! finish step from FDD v1.2 (FR-6.6 to FR-6.11). `READY_TO_FINISH` is a derived state. Completing the last task no longer earns a sticker: a new `finish` endpoint does (§7.4). A routine still Ready to finish at the end of the day is finished by lazy settlement with a `child.settled_through` watermark (§7.12). `V5` migration (`sticker.finish_mode`, `child.settled_through`, `live_sticker` refresh), `ROUTINE_NOT_READY`, I'm Done! button and parent "Finished automatically" chip, TD-18, TD-19, I-21 to I-25. A routine edit that leaves every task done no longer earns (I-3). |
+| 0.5 | 2026-10-15 | Re-earning after a revoke offers the same Sticker Pick choices (FDD v1.3: FR-12.5, FR-12.8, BR-6). `sticker_pick_choice` rows are kept after a claim and after a revoke, and the earn step copies the latest revoked sticker's rows for the same routine and day (§7.5, §7.11). No schema change. A design that was ever offered can't be deleted (I-16). |
 
 ---
 
@@ -186,7 +187,7 @@ Backend packages are organized by feature. Each one has a controller, a service 
 | Task | `task` (identity) + `revision_task` (label, icon, and position within one revision) |
 | Sticker (a design in the Sticker Library) | `sticker_design` |
 | Sticker in a Sticker Book | `sticker` |
-| Sticker Pick | The `sticker_pick_choice` rows of an `UNCLAIMED` sticker |
+| Sticker Pick | The `sticker_pick_choice` rows of a sticker. They are shown while it is `UNCLAIMED` and kept afterwards, so a re-earn after a revoke can offer them again (FR-12.5). |
 | Ready to finish | Not stored. The derived state `READY_TO_FINISH` (§7.3). |
 | I'm Done! (finish) | `POST …/routines/{id}/finish` (§7.4). The sticker records how it was finished in `sticker.finish_mode` (`TAPPED` or `AUTO`). |
 | Category / pack | `sticker_category` |
@@ -216,7 +217,7 @@ erDiagram
     child ||--o{ sticker : earns
     routine |o--o{ sticker : "earned by"
     sticker_design |o--o{ sticker : "looks like"
-    sticker ||--o{ sticker_pick_choice : "offers while unclaimed"
+    sticker ||--o{ sticker_pick_choice : "offers (rows kept after claim and revoke)"
     sticker_design ||--o{ sticker_pick_choice : "offered as"
     sticker_category |o--o{ sticker_design : groups
     child ||--o{ prize_request : makes
@@ -279,9 +280,9 @@ One more query then loads the `revision_task` rows for the returned revisions. H
 | `AVAILABLE` | In the Sticker Book and can be spent | set | `NULL` |
 | `PENDING` | Part of the child's open Prize Request | set | the pending request |
 | `USED` | Spent on a prize | set | the completed request |
-| `REVOKED` | Un-earned by a parent (FDD §6.12). Not shown or counted anywhere a child or the Sticker Book looks. Details are in `sticker_revocation`. | set if it was claimed, else `NULL` | `NULL` |
+| `REVOKED` | Un-earned by a parent (FDD §6.12). Not shown or counted anywhere a child or the Sticker Book looks. Details are in `sticker_revocation`. Its `sticker_pick_choice` rows stay, so a re-earn can offer the same set (FR-12.5). | set if it was claimed, else `NULL` | `NULL` |
 
-The transitions follow FDD §5.3, with `UNCLAIMED` added as the step before it. `UNCLAIMED`, `AVAILABLE`, and `PENDING` can move to `REVOKED`; `USED` can't (FR-12.7). `REVOKED` is final: re-earning inserts a **new** row (FR-12.5).
+The transitions follow FDD §5.3, with `UNCLAIMED` added as the step before it. `UNCLAIMED`, `AVAILABLE`, and `PENDING` can move to `REVOKED`; `USED` can't (FR-12.7). `REVOKED` is final: re-earning inserts a **new** row (FR-12.5). The `sticker_pick_choice` rows stay with the sticker in every status, but only an `UNCLAIMED` sticker shows them (`GET …/pick` returns no choices otherwise). A `REVOKED` sticker keeps its rows so the re-earn can offer the same set (§7.5).
 
 **Ready to finish has no row.** Until a parent or the child taps I'm Done!, or the day ends, a routine with every task done has no `sticker` row at all (TD-18). Unchecking a task is therefore an ordinary delete of a `task_completion` row, with nothing to revoke or clean up (FR-6.7, BR-19). The row is created by Finish (§7.4) or by day settlement (§7.12), and both go through the earn routine in §7.5.
 
@@ -462,7 +463,7 @@ CREATE TABLE sticker (                                   -- one earned sticker i
   INDEX ix_sticker_book (child_id, status, chart_date)
 );
 
-CREATE TABLE sticker_pick_choice (                       -- BR-6: saved once, never regenerated
+CREATE TABLE sticker_pick_choice (                       -- BR-6: saved once, kept after the pick or a revoke, reused on a re-earn
   sticker_id BIGINT  NOT NULL,
   slot       TINYINT NOT NULL,                           -- 1–3, display order
   design_id  BIGINT  NOT NULL,
@@ -646,21 +647,22 @@ The chart response also lists unclaimed stickers from earlier days, which the ch
 
 A parent session may finish a routine on any day up to today (FR-6.5). Without one, only today.
 
-### 7.5 Earning and the Sticker Pick (FR-7.7–7.11, BR-6, BR-8)
+### 7.5 Earning and the Sticker Pick (FR-7.7–7.11, FR-12.5, BR-6, BR-8)
 
 **Earn** (one routine with two callers, Finish in §7.4 and day settlement in §7.12, always inside the child lock):
 
 1. Insert a `sticker` row: `UNCLAIMED`, with a snapshot of the routine's name and icon, `chart_date = D`, `finish_mode` (`TAPPED` or `AUTO`), and `earned_at` (now for `TAPPED`, the end of day D for `AUTO`, §7.12). The unique key makes a duplicate impossible (BR-7).
-2. Build the pool: designs that are `ACTIVE`, not the fallback, and whose category is `NULL` or enabled (FR-10.9).
-3. If the pool is empty, assign the fallback design, set the sticker to `AVAILABLE` and `claimed_at = now`, and mark the response `pick.autoAwarded = true` (FR-7.11).
-4. Otherwise, choose `min(3, pool size)` different designs uniformly at random (an injected `Random`, seeded in tests) and save them as `sticker_pick_choice` slots 1–3.
+2. Look for the latest `REVOKED` sticker for the same routine and `chart_date` that still has `sticker_pick_choice` rows. If there is one, copy its designs to the new sticker in the same slots and skip to the end (FR-12.5). Design status and category aren't checked again, so a design retired in between is still offered, as it would be in an unclaimed pick (BR-8).
+3. Otherwise, build the pool: designs that are `ACTIVE`, not the fallback, and whose category is `NULL` or enabled (FR-10.9).
+4. If the pool is empty, assign the fallback design, set the sticker to `AVAILABLE` and `claimed_at = now`, and mark the response `pick.autoAwarded = true` (FR-7.11).
+5. Otherwise, choose `min(3, pool size)` different designs uniformly at random (an injected `Random`, seeded in tests) and save them as `sticker_pick_choice` slots 1–3.
 
 **Claim:** `POST /api/stickers/{s}/pick {designId}`
 
 1. Lock the sticker's child.
 2. If the sticker is `REVOKED` → `409 STICKER_REVOKED` (a parent revoked it while the pick was open on another device). If it's already claimed: return `200` if it's the same design (an idempotent double tap), or `409 ALREADY_CLAIMED` if it's a different one.
 3. `designId` must be one of the saved choices, otherwise `422 CHOICE_NOT_OFFERED`. The design's status isn't checked, so a design retired after the pick was made can still be picked (BR-8).
-4. Set `design_id`, `AVAILABLE`, and `claimed_at`, then delete the choices. The other two are thrown away (FR-7.8).
+4. Set `design_id`, `AVAILABLE`, and `claimed_at`. The choices stay in `sticker_pick_choice`, unused (`GET …/pick` only returns them for an `UNCLAIMED` sticker), so a revoke followed by a re-earn can offer the same set again (FR-12.5). The other two aren't added to the Sticker Book (FR-7.8).
 
 `GET /api/stickers/{s}/pick` returns the saved choices, so a reload never changes them (FR-7.10, BR-6). Choices point at the live design rows, so an edited name or image always shows its latest version (BR-8, FR-10.4).
 
@@ -687,7 +689,7 @@ sequenceDiagram
     PWA->>Child: Sticker Pick with 3 stickers
     Child->>PWA: Tap one sticker
     PWA->>API: POST /api/stickers/955/pick with designId
-    API->>DB: Lock child, set design and AVAILABLE, delete choices
+    API->>DB: Lock child, set design and AVAILABLE (choices stay)
     API-->>PWA: 200 with the sticker
     PWA->>Child: Sticking animation into the Sticker Book
 ```
@@ -770,7 +772,7 @@ END
 - **Starter set:** Flyway `V2` seeds 24 designs across Animals, Space, Food, and Vehicles (FR-10.2). Because seeding is a migration, it runs once. Deleting starter stickers doesn't bring them back.
 - **Add and edit** (FR-10.3, FR-10.4): a name (1–40 chars) and an artwork key from the catalog. Edits change the row every Sticker Book entry points to, so they show up everywhere.
 - **Retire and reactivate** (FR-10.5): changes `status`.
-- **Delete** (FR-10.6, BR-15): only allowed when no `sticker` and no open `sticker_pick_choice` uses the design (I-4). The foreign keys are `RESTRICT`, and the API answers `409 DESIGN_IN_USE` with "Retire it instead".
+- **Delete** (FR-10.6, BR-15): only allowed when no `sticker` and no `sticker_pick_choice` row, open or kept, uses the design (I-4, I-16). The foreign keys are `RESTRICT`, and the API answers `409 DESIGN_IN_USE` with "Retire it instead".
 - **Warning** (FR-10.7): the list response includes `activeCount`, and the page warns when it's below 3.
 - **Search and packs** (FR-10.8, FR-10.9): search by name, filter by status or category. Disabling a category removes its designs from the pick pool without changing their own status.
 
@@ -787,13 +789,13 @@ END
 5. If the sticker is `USED` → `409 STICKER_USED` (FR-12.7). Nothing changes.
 6. In the same transaction:
    1. Delete the `task_completion` row for (t, D). Other completions stay (FR-12.4).
-   2. If `UNCLAIMED`: delete its `sticker_pick_choice` rows (FR-12.8).
+   2. Leave its `sticker_pick_choice` rows in place, whatever the status, so the re-earn can offer them again (FR-12.5, FR-12.8). An `UNCLAIMED` sticker stops being offered because it is no longer live, not because its rows are gone.
    3. If `PENDING` in request *r*: set the sticker's `prize_request_id = NULL`. If *r* now has no `PENDING` stickers, set *r* to `CANCELLED` with `cancelled_by = PARENT`, `cancel_reason = ALL_STICKERS_REVOKED`, and `cancelled_at` (FR-12.6).
    4. Set the sticker to `REVOKED`. That sets `is_live` to `NULL`, so the routine and day can earn again (BR-7, FR-12.5).
    5. Insert `sticker_revocation` with the task label snapshot, `from_status`, *r*, and whether *r* was cancelled.
 7. Commit. Return the routine's new state (`IN_PROGRESS`, `NOT_STARTED`, or `MISSED`), plus `revoked: { stickerId, fromStatus, prizeRequestId, requestCancelled }`.
 
-**Earning again** (FR-12.5) needs no new code. When the last task is done again, the routine is Ready to finish. Finishing it (the child's or a parent's I'm Done! through §7.4, or the end of the day if it is still today, §7.12) makes §7.5 insert a new `UNCLAIMED` sticker with new random choices. The old choices were deleted in step 6.2, so nothing can bring them back (BR-6).
+**Earning again** (FR-12.5) goes through the normal earn step. When the last task is done again, the routine is Ready to finish. Once it is finished again (the child's or a parent's I'm Done! through §7.4, or the end of the day if it is still today, §7.12), §7.5 inserts a new `UNCLAIMED` sticker and, in its step 2, copies the revoked sticker's saved choices onto it. The child sees the same set, in the same order, whether or not they had picked one before. A routine that has been revoked more than once keeps getting the same set. Only when no revoked sticker has saved choices (for example, the first sticker was the automatic fallback, FR-7.11) is a new draw made.
 
 ```mermaid
 sequenceDiagram
@@ -1474,11 +1476,11 @@ class MySqlContainerConfig {
 | Level | Tools | Focus |
 |---|---|---|
 | Backend unit | JUnit, MockK, fixed `Clock`, seeded `Random` | `RevisionPolicy`, weekday masks, `ChartRules.deriveState` (including `READY_TO_FINISH` on today and on past days), pick generation (including pools of fewer than 3 and of 0), lockout escalation, DST and midnight boundaries, the settlement day range and the end-of-day `earned_at` |
-| Backend integration | `@SpringBootTest` + Testcontainers MySQL 8.4 | One test per business rule (§15.2), full flows, the `reset_parent_pin` procedure, child-deletion cascades, migrations from an empty database and `V4` over a V3 database with data. Revoke from each status (Unclaimed, Available, Pending as one of several, Pending as the last, Used rejected), then re-earn with new choices. Every `live_sticker` read with a revoked row present. Finish (§7.4): the last task earns nothing, undo while Ready to finish is a plain delete, finish earns exactly one sticker and a second call returns the same choices, `ROUTINE_NOT_READY`, and a routine edit that leaves every task done earns nothing (I-3). Settlement (§7.12): an ended day with every task done gets an `AUTO` sticker with `earned_at` at the end of the day, while partly done and skipped routines don't, catching up after a multi-day gap, a `NULL` watermark, a parent's later edit of a settled past day stays Ready to finish, and a revoke today followed by a re-check is auto-finished at the end of the day. `V5` over a V4 database with data, where the `live_sticker` view exposes `finish_mode`. |
+| Backend integration | `@SpringBootTest` + Testcontainers MySQL 8.4 | One test per business rule (§15.2), full flows, the `reset_parent_pin` procedure, child-deletion cascades, migrations from an empty database and `V4` over a V3 database with data. Revoke from each status (Unclaimed, Available, Pending as one of several, Pending as the last, Used rejected), then re-earn and get the same choices back (also after more than one revoke, and when a design was retired in between). Every `live_sticker` read with a revoked row present. Finish (§7.4): the last task earns nothing, undo while Ready to finish is a plain delete, finish earns exactly one sticker and a second call returns the same choices, `ROUTINE_NOT_READY`, and a routine edit that leaves every task done earns nothing (I-3). Settlement (§7.12): an ended day with every task done gets an `AUTO` sticker with `earned_at` at the end of the day, while partly done and skipped routines don't, catching up after a multi-day gap, a `NULL` watermark, a parent's later edit of a settled past day stays Ready to finish, and a revoke today followed by a re-check is auto-finished at the end of the day. `V5` over a V4 database with data, where the `live_sticker` view exposes `finish_mode`. |
 | Concurrency | Integration tests with parallel threads | Two devices tap I'm Done! at the same moment: exactly one sticker, and both get the same choices. A finish racing the first request after midnight: exactly one sticker. Two Prize Requests at once: one wins. Two claims: one design. Revoke against claim, against completing the request, and against the child re-finishing the routine: the result always matches one serial order, and there is never more than one live sticker per routine and day. |
 | Contract | OpenAPI snapshot | Spec drift fails CI. Frontend types are regenerated from it. |
 | Frontend unit | Vitest, React Testing Library, MSW, fake timers | Task tile states and the double-tap guard, the I'm Done! button (shown only for `READY_TO_FINISH`, ignores taps for its first 600 ms, disappears when a task is unchecked), the pick and reloading it, prize selection, the idle timeout, day rollover, the offline state |
-| End-to-end | Playwright with iPad and phone profiles, touch enabled | First run. Earn (last task → I'm Done! → pick → Sticker Book). Tap a task by mistake, undo it, then finish. Reload while Ready to finish keeps the button. Reload in the middle of a pick keeps the choices. Prize Request lifecycle. Past-day fix (check the last task, then I'm Done!). Revoke today → child re-taps → I'm Done! → new pick. Revoke a Pending sticker. PIN lockout. Admin reset → new PIN. |
+| End-to-end | Playwright with iPad and phone profiles, touch enabled | First run. Earn (last task → I'm Done! → pick → Sticker Book). Tap a task by mistake, undo it, then finish. Reload while Ready to finish keeps the button. Reload in the middle of a pick keeps the choices. Prize Request lifecycle. Past-day fix (check the last task, then I'm Done!). Revoke today → child re-taps → I'm Done! → pick with the same choices. Revoke a Pending sticker. PIN lockout. Admin reset → new PIN. |
 | Manual | A real iPad and Android tablet, with the app installed | Installing, sounds, the offline state, the update flow, Guided Access |
 
 ## 14. Non-Functional Targets
@@ -1519,7 +1521,7 @@ class MySqlContainerConfig {
 | BR-3 | Routines are soft-deleted through revisions. Stickers keep a snapshot of the routine name and icon. |
 | BR-4 | A Child Mode write (task or finish) for a past date → `409 DAY_CHANGED` |
 | BR-5 | Any write for a future date → `422 FUTURE_DATE` |
-| BR-6 | Choices saved in `sticker_pick_choice` when the sticker is earned. `GET …/pick` only reads them. A revoke deletes them, and a re-earn saves new ones on a new sticker row. |
+| BR-6 | Choices saved in `sticker_pick_choice` when the sticker is earned. `GET …/pick` only reads them. A claim and a revoke both keep them, and a re-earn copies the latest revoked sticker's rows onto the new sticker row (§7.5 step 2). |
 | BR-7 | `UNIQUE (routine_id, chart_date, is_live)` on `sticker`, which ignores revoked rows (§6.7), plus the child lock |
 | BR-8 | Choices point at live design rows. The claim doesn't check design status. |
 | BR-9 | Designs are retired through `status`. Sticker Books point at the live design row. Deletion is `RESTRICT`. |
@@ -1528,7 +1530,7 @@ class MySqlContainerConfig {
 | BR-12 | No value column anywhere. Counts are `COUNT(*)`. |
 | BR-13 | The request's child must match every sticker's child |
 | BR-14 | `child` → `prize_request` cascades. Retiring a design never touches requests. |
-| BR-15 | Foreign keys from `sticker` and `sticker_pick_choice` to `sticker_design` are `RESTRICT` → `409 DESIGN_IN_USE`. Revoked stickers still count (I-16). |
+| BR-15 | Foreign keys from `sticker` and `sticker_pick_choice` to `sticker_design` are `RESTRICT` → `409 DESIGN_IN_USE`. Revoked stickers still count, and so do designs that were only ever offered in a kept pick (I-16). |
 | BR-16 | Revoke only on `DELETE …/tasks` with a parent session and `revokeSticker=true`. Without a session it's always `409 ROUTINE_LOCKED`. |
 | BR-17 | `REVOKED` is excluded by the `live_sticker` view from the Sticker Book, counts, and charts. The sticker leaves its Pending request. `USED` → `409 STICKER_USED`. |
 | BR-18 | Only the finish endpoint (§7.4) and day settlement (§7.12) call the earn routine (§7.5). Completing a task, saving a routine, and revoking never do. Settlement skips days up to `child.settled_through`, and skipped routines. |
@@ -1561,7 +1563,7 @@ The FDD doesn't settle these points. This design makes the following choices.
 | I-13 | Fallback sticker | A built-in "Gold Star", hidden from the library, that can't be edited, retired, or deleted. | FR-7.11, FR-10.1 |
 | I-14 | Routine with no days selected | Not allowed. Use Pause instead. | FR-4.1, FR-2.6 |
 | I-15 | Which days can be skipped | Any day (past, today, or future) on which the routine has no live sticker. | FR-4.5 |
-| I-16 | Deleting a design that was only on revoked stickers | Still not allowed. The design was once earned, and the revoked row keeps pointing at it for history. Retire it instead. | FR-10.6, BR-15 |
+| I-16 | Deleting a design that was only on revoked stickers, or was only ever offered | Not allowed. A design that was once earned stays pointed at by the revoked row, and a design that was offered stays in the kept `sticker_pick_choice` rows, which a re-earn may offer again. Retire it instead. The `RESTRICT` foreign keys enforce both, and `in_use` already counts every `sticker_pick_choice` row. | FR-10.6, BR-15, FR-12.5 |
 | I-17 | Confirming a revoke | The server requires an explicit `revokeSticker=true` flag, so a stray Parent Mode tap can never revoke. Without it, the parent gets the sticker back for the confirm sheet. | FR-12.3 |
 | I-18 | Which task is recorded | The one the parent unchecked. Unchecking more tasks afterwards is an ordinary undo, because the sticker is already gone. | FR-12.9 |
 | I-19 | Where the parent revokes | History day detail, which covers today and past days. The child's Daily Chart in Child Mode never offers it. | FR-12.2, BR-16 |
@@ -1593,7 +1595,7 @@ The FDD doesn't settle these points. This design makes the following choices.
 | **M2** Routines and chart | Routine editor with revisions, schedules, ordering, reading the Daily Chart | Charts show the right routines for each weekday, and edits follow BR-2 |
 | **M3** Earning | Task completion, celebrations, Sticker Pick, Sticker Book | The full earning flow works on a tablet, and the concurrency tests pass |
 | **M4** Spending | Get a Prize, the Prize Requests page and its history | The full spending flow works, and the BR-10 and BR-11 tests pass |
-| **M4.5** Revocation | `V4` migration, `live_sticker` reads, revoke flow (§7.11), confirm sheet, FR-12.1–12.8 | Revoke from every status works or is rejected as specified, re-earning gives new choices, and the BR-16, BR-17 and revoke concurrency tests pass |
+| **M4.5** Revocation | `V4` migration, `live_sticker` reads, revoke flow (§7.11), confirm sheet, FR-12.1–12.8 | Revoke from every status works or is rejected as specified, re-earning offers the same choices, and the BR-16, BR-17 and revoke concurrency tests pass |
 | **M4.6** Finish step | `V5` migration and `live_sticker` refresh, `READY_TO_FINISH`, the finish endpoint, the I'm Done! button, `DaySettlement`, the tray and parent chip for auto-finished stickers, FR-6.6–6.10 | The last task earns nothing, a mistaken tap can be undone before I'm Done!, a routine left Ready to finish overnight is auto-finished exactly once, and the BR-18 and BR-19 tests pass |
 | **M5** History and hardening | Calendar, offline state, update flow, accessibility pass, end-to-end suite, runbooks | Every Must is done, and end-to-end tests pass on iPad and phone profiles |
 | **M6** Remaining Shoulds | FR-2.5, FR-2.6, FR-4.5, FR-5.6, FR-6.4, FR-6.5, FR-6.11, FR-9.2, FR-10.8, FR-10.9, FR-11.6, FR-11.11–11.13, FR-11.17, FR-11.18, FR-12.9, FR-12.10 | All tested |
