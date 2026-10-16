@@ -80,7 +80,7 @@ describe('sticker revocation (interim fake)', () => {
     })
   })
 
-  it('re-earning after a revoke gives a new sticker with new choices', () => {
+  it('re-earning after a revoke gives a new sticker with the same choices', () => {
     resetFakeApi('one-task-left')
     setFakeParentSession(true)
     const routine = getFakeState().routines.find((r) => r.childId === JANE && r.name === 'Morning Routine')
@@ -99,6 +99,7 @@ describe('sticker revocation (interim fake)', () => {
     const again = fake.finishRoutine(JANE, date, routine.id)
     expect(again.pick?.stickerId).not.toBe(oldId)
     expect(again.routine.state).toBe('AWAITING_PICK')
+    expect(again.pick?.choices.map((c) => c.designId)).toEqual(first.pick?.choices.map((c) => c.designId))
   })
 
   it('PENDING stickers: request stays pending with 1 left, then is cancelled for ALL_STICKERS_REVOKED', () => {
@@ -222,7 +223,7 @@ describe('soft-delete revocation semantics', () => {
     expect(fake.getHistory(JANE, t.date, t.date).days[0].revocations).toHaveLength(1)
   })
 
-  it('UNCLAIMED: discards choices and clears the tray; re-earning coexists with the REVOKED row', () => {
+  it('UNCLAIMED: keeps choices and clears the tray; re-earning offers them again beside the REVOKED row', () => {
     resetFakeApi('pick-waiting')
     setFakeParentSession(true)
     const routine = getFakeState().routines.find((r) => r.childId === JANE && r.name === 'Morning Routine')
@@ -234,10 +235,13 @@ describe('soft-delete revocation semantics', () => {
     const res = revoke(date, routine.tasks[0].id)
     expect(res.revoked).toMatchObject({ stickerId: oldId, fromStatus: 'UNCLAIMED' })
     expect(res.routine.state).toBe('IN_PROGRESS')
-    expect(stickerRow(oldId)?.choices).toEqual([])
+    const offered = stickerRow(oldId)?.choices ?? []
+    expect(offered).toHaveLength(3)
+    expect(fake.getStickerPick(oldId).choices).toEqual([])
     expect(fake.completeTask(JANE, date, routine.tasks[0].id).routine.state).toBe('READY_TO_FINISH')
     const again = fake.finishRoutine(JANE, date, routine.id)
     expect(again.pick?.stickerId).not.toBe(oldId)
+    expect(again.pick?.choices.map((c) => c.designId)).toEqual(offered)
     expect(stickerRow(oldId)?.status).toBe('REVOKED')
     expect(getFakeState().stickers.filter((s) => s.routineId === routine.id && s.chartDate === date && s.status !== 'REVOKED')).toHaveLength(1)
   })

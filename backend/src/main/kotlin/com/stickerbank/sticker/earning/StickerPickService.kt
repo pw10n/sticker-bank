@@ -50,15 +50,10 @@ class StickerPickService(
         ).params(childId, routineId, chartDate, routineName, routineIconKey, now, finishMode.name).update(keys)
         val stickerId = requireNotNull(keys.key).toLong()
 
-        val pool = jdbc.sql(
-            """
-            SELECT d.id FROM sticker_design d
-              LEFT JOIN sticker_category c ON c.id = d.category_id
-             WHERE d.status = 'ACTIVE' AND d.is_fallback = FALSE AND (d.category_id IS NULL OR c.enabled = TRUE)
-            """.trimIndent(),
-        ).query(Long::class.java).list().map { requireNotNull(it) }
+        // FR-12.5: re-earning after a revoke offers the same choices again. Otherwise draw a fresh set (FR-7.7).
+        val offered = previousChoices(routineId, chartDate).ifEmpty { ChoiceSelector.select(activePool(), random) }
 
-        val result = if (pool.isEmpty()) {
+        val result = if (offered.isEmpty()) {
             val fallbackId = jdbc.sql("SELECT id FROM sticker_design WHERE is_fallback = TRUE ORDER BY id LIMIT 1")
                 .query(Long::class.java).single()
             jdbc.sql("UPDATE sticker SET design_id = ?, status = 'AVAILABLE', claimed_at = ? WHERE id = ?")
@@ -74,8 +69,7 @@ class StickerPickService(
                 claimed = designRef(fallbackId),
             )
         } else {
-            val chosen = ChoiceSelector.select(pool, random)
-            chosen.forEachIndexed { index, designId ->
+            offered.forEachIndexed { index, designId ->
                 jdbc.sql("INSERT INTO sticker_pick_choice (sticker_id, slot, design_id) VALUES (?, ?, ?)")
                     .params(stickerId, index + 1, designId).update()
             }
@@ -152,12 +146,35 @@ class StickerPickService(
                 if (!offered) throw DomainException(ErrorCode.CHOICE_NOT_OFFERED)
                 jdbc.sql("UPDATE sticker SET design_id = ?, status = 'AVAILABLE', claimed_at = ? WHERE id = ?")
                     .params(designId, now(), stickerId).update()
-                jdbc.sql("DELETE FROM sticker_pick_choice WHERE sticker_id = ?").param(stickerId).update()
                 log.info("pick claimed stickerId={} childId={} designId={}", stickerId, childId, designId)
             }
             book.bookSticker(stickerId)
         }
     }
+
+    private fun activePool(): List<Long> = jdbc.sql(
+        """
+        SELECT d.id FROM sticker_design d
+          LEFT JOIN sticker_category c ON c.id = d.category_id
+         WHERE d.status = 'ACTIVE' AND d.is_fallback = FALSE AND (d.category_id IS NULL OR c.enabled = TRUE)
+        """.trimIndent(),
+    ).query(Long::class.java).list().map { requireNotNull(it) }
+
+    /**
+     * The choices, in slot order, of the latest revoked sticker for this routine and day that still has any (BR-6).
+     * Choice rows are kept after a claim or a revoke so a re-earn can offer them again. Like an unclaimed pick (BR-8),
+     * the set is reused as saved even if a design was retired since.
+     */
+    private fun previousChoices(routineId: Long, chartDate: LocalDate): List<Long> = jdbc.sql(
+        """
+        SELECT c.design_id FROM sticker_pick_choice c
+         WHERE c.sticker_id = (SELECT s.id FROM sticker s
+                                WHERE s.routine_id = ? AND s.chart_date = ? AND s.status = 'REVOKED'
+                                  AND EXISTS (SELECT 1 FROM sticker_pick_choice x WHERE x.sticker_id = s.id)
+                                ORDER BY s.id DESC LIMIT 1)
+         ORDER BY c.slot
+        """.trimIndent(),
+    ).params(routineId, chartDate).query(Long::class.java).list().map { requireNotNull(it) }
 
     private fun designRef(designId: Long): DesignRefDto =
         jdbc.sql("SELECT id, name, artwork_key FROM sticker_design WHERE id = ?").param(designId)

@@ -966,17 +966,31 @@ function shuffled<T>(items: T[]): T[] {
   return a
 }
 
-/** Earns the routine's sticker for `date`: UNCLAIMED with up to 3 choices, or the AVAILABLE fallback. Only I'm Done! and day settlement call this. */
+/** Choices of the latest revoked sticker for this routine and day that still has some (FR-12.5). */
+function previousChoices(routineId: number, date: string): number[] {
+  const revoked = state.stickers.filter(
+    (s) => s.routineId === routineId && s.chartDate === date && s.source === 'ROUTINE' && s.status === 'REVOKED' && s.choices.length > 0,
+  )
+  return revoked.length > 0 ? [...revoked[revoked.length - 1].choices] : []
+}
+
+/**
+ * Earns the routine's sticker for `date`: UNCLAIMED with up to 3 choices, or the AVAILABLE fallback.
+ * Re-earning after a revoke offers the same choices again (FR-12.5). Only I'm Done! and day settlement call this.
+ */
 export function earnSticker(
   r: FakeRoutine,
   date: string,
   finishMode: 'TAPPED' | 'AUTO',
   earnedAt: string = nowIso(),
 ): FakeSticker {
-  const pool = designPool()
-  const choices = shuffled(pool)
-    .slice(0, 3)
-    .map((d) => d.id)
+  const reused = previousChoices(r.id, date)
+  const choices =
+    reused.length > 0
+      ? reused
+      : shuffled(designPool())
+          .slice(0, 3)
+          .map((d) => d.id)
   const auto = choices.length === 0
   const now = earnedAt
   const sticker: FakeSticker = {
@@ -1159,7 +1173,7 @@ function revokeSticker(
   state.completions.delete(doneKey(taskId, date))
   sticker.status = 'REVOKED'
   sticker.prizeRequestId = null
-  sticker.choices = []
+  // the choices stay on the revoked sticker so a re-earn can offer them again (FR-12.5)
   return {
     routine: chartRoutine(routine, date),
     pick: null,

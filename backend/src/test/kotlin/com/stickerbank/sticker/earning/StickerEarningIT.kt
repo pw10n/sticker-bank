@@ -76,9 +76,11 @@ class StickerEarningIT {
         val pick = earn()
         val (first, second, third) = pick.choices.map { it.designId }
         mvc.perform(claim(pick.stickerId, first)).andExpect(status().isOk).andExpect(jsonPath("$.status").value("AVAILABLE"))
-        val remaining = jdbc.sql("SELECT COUNT(*) FROM sticker_pick_choice WHERE sticker_id = ?")
+        // the offered set is kept after the claim so a re-earn after a revoke can offer it again (FR-12.5)
+        val kept = jdbc.sql("SELECT COUNT(*) FROM sticker_pick_choice WHERE sticker_id = ?")
             .param(pick.stickerId).query(Int::class.java).single()
-        assertThat(remaining).isZero()
+        assertThat(kept).isEqualTo(3)
+        mvc.perform(get("/api/stickers/${pick.stickerId}/pick")).andExpect(jsonPath("$.choices.length()").value(0))
         mvc.perform(claim(pick.stickerId, first)).andExpect(status().isOk)
         mvc.perform(claim(pick.stickerId, second)).andExpect(status().isConflict).andExpect(jsonPath("$.code").value("ALREADY_CLAIMED"))
         assertThat(third).isNotEqualTo(first)

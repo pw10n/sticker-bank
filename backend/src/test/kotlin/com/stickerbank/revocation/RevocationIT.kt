@@ -66,7 +66,7 @@ class RevocationIT : FlowTestBase() {
     )
 
     @Test
-    fun `revoking an unclaimed sticker of a past day deletes its choices and drops it from the tray`() {
+    fun `revoking an unclaimed sticker of a past day keeps its choices and drops it from the tray`() {
         val id = seedSticker(yesterday, StickerStatus.UNCLAIMED)
         chart().andExpect(jsonPath("$.unclaimedFromEarlierDays.length()").value(1))
 
@@ -79,7 +79,7 @@ class RevocationIT : FlowTestBase() {
             .andExpect(jsonPath("$.routine.sticker").doesNotExist())
             .andExpect(jsonPath("$.pick").doesNotExist())
 
-        assertThat(count("SELECT COUNT(*) FROM sticker_pick_choice WHERE sticker_id = ?", id)).isZero()
+        assertThat(count("SELECT COUNT(*) FROM sticker_pick_choice WHERE sticker_id = ?", id)).isEqualTo(3)
         assertThat(stickerStatus(id)).isEqualTo("REVOKED")
         assertThat(count("SELECT COUNT(*) FROM task_completion WHERE routine_id = ?", r.routineId)).isEqualTo(1)
         chart().andExpect(jsonPath("$.unclaimedFromEarlierDays.length()").value(0))
@@ -156,7 +156,7 @@ class RevocationIT : FlowTestBase() {
     }
 
     @Test
-    fun `re-earning after a revoke creates a new sticker with new saved choices`() {
+    fun `re-earning after a revoke creates a new sticker with a fresh draw when the old one saved no choices`() {
         val first = seedSticker(today, StickerStatus.AVAILABLE)
         revoke("today", r.taskIds[1]).andExpect(status().isOk)
 
@@ -178,6 +178,89 @@ class RevocationIT : FlowTestBase() {
         assertThat(liveCount()).isEqualTo(1)
         assertThat(count("SELECT COUNT(*) FROM sticker_pick_choice WHERE sticker_id = ?", second)).isEqualTo(3)
         assertThat(count("SELECT COUNT(*) FROM sticker_revocation WHERE sticker_id = ?", first)).isEqualTo(1)
+    }
+
+    /** Checks every task and taps I'm Done! through the API as the child. Returns the response body, which carries the pick. */
+    private fun finishRoutine(): String {
+        completeTask(childId, "today", r.taskIds[0]).andExpect(status().isOk)
+        completeTask(childId, "today", r.taskIds[1]).andExpect(status().isOk)
+        return read(finishRoutine(childId, "today", r.routineId).andExpect(status().isOk))
+    }
+
+    /** After a revoke of the last task: the child taps it again and taps I'm Done! again. */
+    private fun refinishRoutine(): String {
+        completeTask(childId, "today", r.taskIds[1]).andExpect(status().isOk)
+            .andExpect(jsonPath("$.routine.state").value("READY_TO_FINISH"))
+        return read(finishRoutine(childId, "today", r.routineId).andExpect(status().isOk))
+    }
+
+    private fun choiceIds(body: String) = longs(body, "$.pick.choices[*].designId")
+
+    @Test
+    fun `re-earning after revoking an unclaimed sticker offers the same choices in the same order`() {
+        val first = finishRoutine()
+        val offered = choiceIds(first)
+        assertThat(offered).hasSize(3)
+
+        revoke("today", r.taskIds[1]).andExpect(status().isOk).andExpect(jsonPath("$.revoked.fromStatus").value("UNCLAIMED"))
+        val second = refinishRoutine()
+
+        assertThat(long(second, "$.pick.stickerId")).isNotEqualTo(long(first, "$.pick.stickerId"))
+        assertThat(choiceIds(second)).containsExactlyElementsOf(offered)
+        assertThat(count("SELECT COUNT(*) FROM sticker_pick_choice WHERE sticker_id = ?", long(second, "$.pick.stickerId"))).isEqualTo(3)
+    }
+
+    @Test
+    fun `re-earning after revoking a claimed sticker offers the same choices again`() {
+        val first = finishRoutine()
+        val offered = choiceIds(first)
+        claim(long(first, "$.pick.stickerId"), offered[1]).andExpect(status().isOk)
+
+        revoke("today", r.taskIds[1]).andExpect(status().isOk).andExpect(jsonPath("$.revoked.fromStatus").value("AVAILABLE"))
+        val second = refinishRoutine()
+
+        assertThat(choiceIds(second)).containsExactlyElementsOf(offered)
+        // the child may now pick any of them, including one they didn't pick the first time
+        claim(long(second, "$.pick.stickerId"), offered[2]).andExpect(status().isOk)
+    }
+
+    @Test
+    fun `the same choices come back after more than one revoke`() {
+        val offered = choiceIds(finishRoutine())
+
+        revoke("today", r.taskIds[1]).andExpect(status().isOk)
+        val second = refinishRoutine()
+        revoke("today", r.taskIds[1]).andExpect(status().isOk)
+        val third = refinishRoutine()
+
+        assertThat(choiceIds(second)).containsExactlyElementsOf(offered)
+        assertThat(choiceIds(third)).containsExactlyElementsOf(offered)
+        assertThat(liveCount()).isEqualTo(1)
+    }
+
+    @Test
+    fun `a design retired after the revoke is still offered when the sticker is earned again`() {
+        val offered = choiceIds(finishRoutine())
+        revoke("today", r.taskIds[1]).andExpect(status().isOk)
+        jdbc.sql("UPDATE sticker_design SET status = 'RETIRED' WHERE id = ?").param(offered[0]).update()
+
+        assertThat(choiceIds(refinishRoutine())).containsExactlyElementsOf(offered)
+    }
+
+    @Test
+    fun `choices are only reused for the same routine and day`() {
+        val offered = choiceIds(finishRoutine())
+        revoke("today", r.taskIds[1]).andExpect(status().isOk)
+
+        // another routine earning on the same day gets its own draw
+        val other = fixtures.createRoutine(childId, name = "Evening Routine")
+        completeTask(childId, "today", other.taskIds[0]).andExpect(status().isOk)
+        completeTask(childId, "today", other.taskIds[1]).andExpect(status().isOk)
+        val otherPick = read(finishRoutine(childId, "today", other.routineId).andExpect(status().isOk))
+        assertThat(choiceIds(otherPick)).hasSize(3).isNotEqualTo(offered)
+
+        // and the original routine still gets its saved set back
+        assertThat(choiceIds(refinishRoutine())).containsExactlyElementsOf(offered)
     }
 
     @Test

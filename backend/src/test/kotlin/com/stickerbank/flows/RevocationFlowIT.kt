@@ -47,8 +47,11 @@ class RevocationFlowIT : FlowTestBase() {
         val again = read(finishRoutine(childId, "today", routine.id).andExpect(status().isOk))
         val secondSticker = long(again, "$.pick.stickerId")
         assertThat(secondSticker).isNotEqualTo(firstSticker)
-        assertThat(longs(again, "$.pick.choices[*].designId")).hasSize(3)
-        claim(secondSticker, long(again, "$.pick.choices[0].designId")).andExpect(status().isOk)
+        // FR-12.5: the same three choices are offered again, in the same order
+        assertThat(longs(again, "$.pick.choices[*].designId"))
+            .hasSize(3)
+            .containsExactlyElementsOf(longs(earned, "$.pick.choices[*].designId"))
+        claim(secondSticker, long(again, "$.pick.choices[1].designId")).andExpect(status().isOk)
         fetch("/api/children/$childId/stickers").andExpect(jsonPath("$.items.length()").value(1))
             .andExpect(jsonPath("$.items[0].stickerId").value(secondSticker))
             .andExpect(jsonPath("$.counts.available").value(1))

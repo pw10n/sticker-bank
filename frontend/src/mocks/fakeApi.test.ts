@@ -36,6 +36,13 @@ function finishJaneMorning() {
   return fake.finishRoutine(JANE, fake.today(), janeMorning().id)
 }
 
+/** After a revoke of the last task: tap it again, then tap I'm Done! again. */
+function refinishJaneMorning() {
+  const r = janeMorning()
+  fake.completeTask(JANE, fake.today(), r.tasks[3].id)
+  return fake.finishRoutine(JANE, fake.today(), r.id)
+}
+
 describe('fake state rules', () => {
   it('builds every scenario', () => {
     for (const name of [
@@ -92,6 +99,28 @@ describe('fake state rules', () => {
     expect(fake.claimStickerPick(sticker.id, { designId: a }).status).toBe('AVAILABLE')
     expect(fake.claimStickerPick(sticker.id, { designId: a }).design.designId).toBe(a)
     expect(code(() => fake.claimStickerPick(sticker.id, { designId: b }))).toBe('409 ALREADY_CLAIMED')
+  })
+
+  it('re-earning after a revoke offers the same choices again, claimed or not', () => {
+    resetFakeApi()
+    const first = finishJaneMorning()
+    const offered = first.pick?.choices.map((c) => c.designId) ?? []
+    expect(offered).toHaveLength(3)
+    const r = janeMorning()
+    setFakeParentSession(true)
+
+    // revoke while the pick is still unclaimed
+    fake.uncompleteTask(JANE, fake.today(), r.tasks[3].id, { revokeSticker: true })
+    const second = refinishJaneMorning()
+    expect(second.pick?.stickerId).not.toBe(first.pick?.stickerId)
+    expect(second.pick?.choices.map((c) => c.designId)).toEqual(offered)
+
+    // revoke after the child picked one: the whole set comes back, not just the picked design
+    fake.claimStickerPick(second.pick?.stickerId ?? 0, { designId: offered[0] })
+    fake.uncompleteTask(JANE, fake.today(), r.tasks[3].id, { revokeSticker: true })
+    const third = refinishJaneMorning()
+    expect(third.pick?.choices.map((c) => c.designId)).toEqual(offered)
+    expect(fake.getStickerPick(first.pick?.stickerId ?? 0).choices).toEqual([])
   })
 
   it('undo after earning is ROUTINE_LOCKED', () => {

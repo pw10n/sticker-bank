@@ -207,9 +207,10 @@ class DaySettlementIT : FlowTestBase() {
     }
 
     @Test
-    fun `a sticker revoked today is earned again at the end of the day`() {
+    fun `a sticker revoked today is earned again at the end of the day with the same choices`() {
         checkEveryTask()
-        finishRoutine(childId, "today", r.routineId).andExpect(status().isOk)
+        val first = read(finishRoutine(childId, "today", r.routineId).andExpect(status().isOk))
+        val offered = longs(first, "$.pick.choices[*].designId")
         send("DELETE", "/api/children/$childId/days/today/tasks/${r.taskIds[1]}?revokeSticker=true", null, parent).andExpect(status().isOk)
         completeTask(childId, "today", r.taskIds[1]).andExpect(status().isOk)
             .andExpect(jsonPath("$.routine.state").value("READY_TO_FINISH"))
@@ -220,7 +221,7 @@ class DaySettlementIT : FlowTestBase() {
         assertThat(rows.map { it.status }).containsExactly("REVOKED", "UNCLAIMED")
         assertThat(rows.map { it.finishMode }).containsExactly("TAPPED", "AUTO")
         val stickerId = long(chart, "$.unclaimedFromEarlierDays[0].stickerId")
-        assertThat(longs(read(fetch("/api/stickers/$stickerId/pick")), "$.choices[*].designId")).hasSize(3)
+        assertThat(longs(read(fetch("/api/stickers/$stickerId/pick")), "$.choices[*].designId")).containsExactlyElementsOf(offered)
         assertThat(count("SELECT COUNT(*) FROM live_sticker WHERE routine_id = ?", r.routineId)).isEqualTo(1)
     }
 

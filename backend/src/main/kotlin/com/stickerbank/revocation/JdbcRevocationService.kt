@@ -55,8 +55,8 @@ class JdbcRevocationService(private val jdbc: JdbcClient, private val queries: C
 
         val now = LocalDateTime.ofInstant(clock.now(), ZoneOffset.UTC)
         var requestCancelled = false
+        // The sticker's pick choices stay on the revoked row, so re-earning offers the same set (FR-12.5).
         when (sticker.status) {
-            StickerStatus.UNCLAIMED -> jdbc.sql("DELETE FROM sticker_pick_choice WHERE sticker_id = ?").param(sticker.id).update()
             StickerStatus.PENDING -> {
                 val requestId = sticker.prizeRequestId
                 jdbc.sql("UPDATE sticker SET prize_request_id = NULL WHERE id = ?").param(sticker.id).update()

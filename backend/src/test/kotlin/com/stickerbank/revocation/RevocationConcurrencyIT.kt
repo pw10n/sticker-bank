@@ -80,7 +80,8 @@ class RevocationConcurrencyIT : FlowTestBase() {
             .query(String::class.java).single()
         // revoke first -> the claim is rejected; claim first -> the revoke sees AVAILABLE
         assertThat(from).isEqualTo(if (claim in 200..299) "AVAILABLE" else "UNCLAIMED")
-        assertThat(count("SELECT COUNT(*) FROM sticker_pick_choice WHERE sticker_id = ?", stickerId)).isZero()
+        // the offered set stays on the revoked row whichever side won, so a re-earn can offer it again (FR-12.5)
+        assertThat(count("SELECT COUNT(*) FROM sticker_pick_choice WHERE sticker_id = ?", stickerId)).isEqualTo(3)
         w.assertAtMostOneLive()
         assertThat(count("SELECT COUNT(*) FROM live_sticker WHERE routine_id = ?", w.routineId)).isZero()
     }
