@@ -1,8 +1,9 @@
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { server } from '../mocks/server'
 import { api, unwrap } from './client'
 import { ApiError, isApiError } from './errors'
+import { getMinFrontendVersion, resetMinFrontendVersion } from './minFrontendVersion'
 
 describe('api client', () => {
   it('adds X-Sticker-Bank to non-GET requests only', async () => {
@@ -59,5 +60,32 @@ describe('api client', () => {
   it('returns undefined for 204', async () => {
     server.use(http.delete('*/api/parent/session', () => new HttpResponse(null, { status: 204 })))
     await expect(unwrap(api.DELETE('/api/parent/session'))).resolves.toBeUndefined()
+  })
+})
+
+describe('minimum frontend version header', () => {
+  afterEach(() => resetMinFrontendVersion())
+
+  it('records what the server announces, on success and on errors', async () => {
+    server.use(
+      http.get('*/api/bootstrap', () => new HttpResponse('boom', { status: 500, headers: { 'X-Min-Frontend-Version': '1.2.0' } })),
+    )
+    expect(getMinFrontendVersion()).toBeNull()
+    await unwrap(api.GET('/api/bootstrap')).catch(() => undefined)
+    expect(getMinFrontendVersion()).toBe('1.2.0')
+
+    server.use(http.get('*/api/parent/settings', () => HttpResponse.json({}, { headers: { 'X-Min-Frontend-Version': '1.3.0' } })))
+    await unwrap(api.GET('/api/parent/settings'))
+    expect(getMinFrontendVersion()).toBe('1.3.0')
+  })
+
+  it('keeps the last announcement when a response has no header', async () => {
+    server.use(
+      http.get('*/api/bootstrap', () => HttpResponse.json({}, { headers: { 'X-Min-Frontend-Version': '1.2.0' } })),
+      http.get('*/api/parent/settings', () => HttpResponse.json({})),
+    )
+    await unwrap(api.GET('/api/bootstrap'))
+    await unwrap(api.GET('/api/parent/settings'))
+    expect(getMinFrontendVersion()).toBe('1.2.0')
   })
 })

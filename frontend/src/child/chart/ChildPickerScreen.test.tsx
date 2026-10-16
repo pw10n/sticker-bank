@@ -60,6 +60,12 @@ describe('ChildPickerScreen', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/c/2'))
   })
 
+  it('shows the app and server versions at the bottom', async () => {
+    setup('default')
+    await screen.findByRole('button', { name: /John Doe/ })
+    await waitFor(() => expect(screen.getByTestId('version-footer')).toHaveTextContent('App dev · Server mock'))
+  })
+
   it('lists children and navigates on selection', async () => {
     const router = setup('default')
     await userEvent.click(await screen.findByRole('button', { name: /John Doe/ }))

@@ -24,6 +24,8 @@ springdoc:
     path: /api/openapi.json
     version: openapi_3_1
 sticker-bank:
+  # Blank = this build's own APP_VERSION (frontends older than the server refresh themselves).
+  min-frontend-version: ${STICKER_BANK_MIN_FRONTEND_VERSION:}
   parent-session:
     absolute-max: 12h
     cookie-secure: ${STICKER_BANK_COOKIE_SECURE:true}

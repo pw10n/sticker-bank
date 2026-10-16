@@ -1,5 +1,6 @@
 import createClient, { type Middleware } from 'openapi-fetch'
 import { ApiError, type Problem } from './errors'
+import { MIN_FRONTEND_VERSION_HEADER, reportMinFrontendVersion } from './minFrontendVersion'
 import type { paths } from './schema'
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
@@ -21,6 +22,16 @@ export const api = createClient<paths>({
   credentials: 'same-origin',
 })
 api.use(csrfHeader)
+
+/** Remembers the minimum frontend version the server announces, on errors too, so a stale app learns of it on any call. */
+const minFrontendVersion: Middleware = {
+  onResponse({ response }) {
+    const announced = response.headers.get(MIN_FRONTEND_VERSION_HEADER)?.trim()
+    if (announced) reportMinFrontendVersion(announced)
+    return response
+  },
+}
+api.use(minFrontendVersion)
 
 type Result<T> = { data?: T; error?: unknown; response: Response }
 

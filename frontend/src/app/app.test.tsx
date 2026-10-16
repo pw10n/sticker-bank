@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/errors'
+import { reportMinFrontendVersion, resetMinFrontendVersion } from '../api/minFrontendVersion'
 import { qk } from '../api/queryKeys'
 import { server } from '../mocks/server'
 import { SoundProvider, useSound } from '../sound'
@@ -20,22 +21,26 @@ import { bootstrapFixture, makeClient, mockBootstrap, wrapperFor } from './testU
 import { useCelebrationGuard, useUpdatePrompt } from './updateContext'
 import { UpdatePromptProvider, UpdateToast } from './updatePrompt'
 
-const swState = { needRefresh: false, apply: vi.fn(), check: vi.fn() }
+const swState = { needRefresh: false, apply: vi.fn(), check: vi.fn(), hardReload: vi.fn() }
 vi.mock('./swRegistration', () => ({
   useServiceWorker: () => ({
     needRefresh: swState.needRefresh,
     applyUpdate: swState.apply,
     checkForUpdate: swState.check,
+    hardReload: swState.hardReload,
   }),
 }))
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+  resetMinFrontendVersion()
   vi.useRealTimers()
   vi.restoreAllMocks()
   swState.needRefresh = false
   swState.apply.mockClear()
   swState.check.mockClear()
+  swState.hardReload.mockClear()
 })
 
 describe('queryClient defaults', () => {
@@ -338,9 +343,8 @@ describe('sound', () => {
 })
 
 describe('update prompt', () => {
-  function setup() {
+  function setup(client = makeClient()) {
     mockBootstrap(() => bootstrapFixture())
-    const client = makeClient()
     return renderHook(
       () => ({ mode: useMode(), up: useUpdatePrompt(), guard: useCelebrationGuard() }),
       {
@@ -389,5 +393,104 @@ describe('update prompt', () => {
     expect(swState.apply).not.toHaveBeenCalled()
     act(() => screen.getByRole('button', { name: 'Reload' }).click())
     expect(swState.apply).toHaveBeenCalledTimes(1)
+  })
+
+  describe('minimum frontend version', () => {
+    const tick = (ms: number) => act(() => void vi.advanceTimersByTime(ms))
+    /** This build is 1.0.0 and the server just announced a minimum (default 1.1.0, so this build is too old). */
+    function outdatedSetup(min = '1.1.0', client = makeClient()) {
+      vi.stubEnv('VITE_APP_VERSION', '1.0.0')
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+      reportMinFrontendVersion(min)
+      return setup(client)
+    }
+
+    it('applies a waiting worker at once in child mode, without waiting for a foreground event', () => {
+      swState.needRefresh = true
+      const { result } = outdatedSetup()
+      expect(result.current.up.updateRequired).toBe(true)
+      expect(swState.apply).toHaveBeenCalledTimes(1)
+      tick(5_000) // needRefresh stays true until the reload, so it must not apply again
+      expect(swState.apply).toHaveBeenCalledTimes(1)
+    })
+
+    it('hard reloads when applying the worker did not reload the page (a page no worker controls)', () => {
+      swState.needRefresh = true
+      outdatedSetup()
+      expect(swState.apply).toHaveBeenCalledTimes(1)
+      tick(5_000)
+      expect(swState.hardReload).not.toHaveBeenCalled()
+      tick(10_000)
+      expect(swState.hardReload).toHaveBeenCalled()
+      expect(swState.apply).toHaveBeenCalledTimes(1)
+    })
+
+    it('does nothing when this build meets the minimum, or when it is a dev build', () => {
+      swState.needRefresh = true
+      outdatedSetup('1.0.0')
+      tick(60_000)
+      expect(swState.apply).not.toHaveBeenCalled()
+      expect(swState.hardReload).not.toHaveBeenCalled()
+
+      vi.stubEnv('VITE_APP_VERSION', 'dev')
+      reportMinFrontendVersion('9.9.9')
+      tick(60_000)
+      expect(swState.apply).not.toHaveBeenCalled()
+    })
+
+    it('looks for the new worker, then applies it at the next safe moment once it is waiting', () => {
+      const { rerender } = outdatedSetup()
+      expect(swState.check).toHaveBeenCalled()
+      expect(swState.apply).not.toHaveBeenCalled()
+      swState.needRefresh = true
+      rerender()
+      tick(5_000)
+      expect(swState.apply).toHaveBeenCalledTimes(1)
+    })
+
+    it('never reloads during a celebration or while a write is in flight', () => {
+      swState.needRefresh = true
+      const client = makeClient()
+      const isMutating = vi.spyOn(client, 'isMutating').mockReturnValue(1)
+      const { result } = outdatedSetup('1.1.0', client)
+      act(() => result.current.guard.setCelebrating(true))
+      tick(10_000)
+      expect(swState.apply).not.toHaveBeenCalled()
+      act(() => result.current.guard.setCelebrating(false))
+      tick(5_000)
+      expect(swState.apply).not.toHaveBeenCalled() // still writing
+      isMutating.mockReturnValue(0)
+      tick(5_000)
+      expect(swState.apply).toHaveBeenCalledTimes(1)
+    })
+
+    it('falls back to a hard reload only after the worker had 30 s to show up', () => {
+      outdatedSetup()
+      tick(25_000)
+      expect(swState.hardReload).not.toHaveBeenCalled()
+      tick(10_000)
+      expect(swState.hardReload).toHaveBeenCalled()
+      expect(swState.hardReload).toHaveBeenCalledWith()
+    })
+
+    it('never reloads on its own in parent mode, and the toast says it is required', () => {
+      swState.needRefresh = true
+      const { result } = outdatedSetup()
+      swState.apply.mockClear()
+      act(() => result.current.mode.enterParentMode())
+      tick(60_000)
+      expect(swState.apply).not.toHaveBeenCalled()
+      expect(swState.hardReload).not.toHaveBeenCalled()
+      expect(screen.getByText(/must reload/)).toBeTruthy()
+      act(() => screen.getByRole('button', { name: 'Reload' }).click())
+      expect(swState.apply).toHaveBeenCalledTimes(1)
+    })
+
+    it('Reload with no worker waiting forces a hard reload past the loop guard', () => {
+      const { result } = outdatedSetup()
+      act(() => result.current.mode.enterParentMode())
+      act(() => screen.getByRole('button', { name: 'Reload' }).click())
+      expect(swState.hardReload).toHaveBeenCalledWith(true)
+    })
   })
 })

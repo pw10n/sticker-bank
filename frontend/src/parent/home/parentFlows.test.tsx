@@ -121,6 +121,11 @@ describe('ParentGuard', () => {
 })
 
 describe('ParentLayout', () => {
+  it('shows the app and server versions at the bottom', async () => {
+    setup('/parent', 'default', true)
+    await waitFor(() => expect(screen.getByTestId('version-footer')).toHaveTextContent('App dev · Server mock'))
+  })
+
   it('exits Parent Mode, ends the session and navigates away', async () => {
     const { user } = setup('/parent', 'default', true)
     await user.click(await screen.findByRole('button', { name: 'Exit Parent Mode' }))
@@ -149,6 +154,12 @@ describe('ParentHomeScreen', () => {
 })
 
 describe('SettingsScreen', () => {
+  it('says which version is the app and which is the server in About', async () => {
+    setup('/parent/settings', 'default', true)
+    expect(await screen.findByText('App version dev')).toBeInTheDocument()
+    await screen.findByText('Server version mock')
+  })
+
   it('changes the PIN', async () => {
     const { user } = setup('/parent/settings', 'default', true)
     await user.type(await screen.findByLabelText('Current PIN'), DEMO_PIN)

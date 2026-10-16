@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useBootstrap } from '../api/hooks'
-import { useDeviceSettings, useMode, useParentIdleTimer } from '../app'
+import { useDeviceSettings, useMode, useParentIdleTimer, VersionFooter } from '../app'
 import { Badge, Button } from '../ui'
 
 const LINKS = [
@@ -54,7 +54,7 @@ export default function ParentLayout() {
         </ul>
       </nav>
 
-      <div className="flex min-w-0 flex-col pb-24 md:pb-0">
+      <div className="flex min-h-dvh min-w-0 flex-col pb-24 md:pb-0">
         <header className="flex items-center justify-between gap-3 border-b-2 border-ink/10 bg-white px-4 py-3">
           <p className="text-xl font-bold">Parent Mode</p>
           <Button variant="secondary" onClick={() => void exit()}>
@@ -64,6 +64,7 @@ export default function ParentLayout() {
         <main className="mx-auto w-full max-w-4xl p-4 md:p-6">
           <Outlet />
         </main>
+        <VersionFooter className="mt-auto pb-2 pt-4" />
       </div>
     </div>
   )

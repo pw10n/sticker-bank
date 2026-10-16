@@ -17,3 +17,4 @@ SWARM_STATE.md
 **/playwright-report
 **/coverage
 deploy
+**/.DS_Store

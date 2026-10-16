@@ -1,7 +1,10 @@
 package com.stickerbank.common
 
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -30,15 +33,16 @@ class HeaderSampleController {
 class ApiHeadersFilterTest {
     private lateinit var mvc: MockMvc
 
+    private fun mvcWith(minFrontendVersion: String?): MockMvc = MockMvcBuilders.standaloneSetup(HeaderSampleController())
+        .addFilters<org.springframework.test.web.servlet.setup.StandaloneMockMvcBuilder>(
+            SecurityHeadersFilter(),
+            ApiHeadersFilter(minFrontendVersion),
+        )
+        .build()
+
     @BeforeEach
     fun setUp() {
-        mvc =
-            MockMvcBuilders.standaloneSetup(HeaderSampleController())
-                .addFilters<org.springframework.test.web.servlet.setup.StandaloneMockMvcBuilder>(
-                    SecurityHeadersFilter(),
-                    ApiHeadersFilter(),
-                )
-                .build()
+        mvc = mvcWith(null)
     }
 
     @Test
@@ -78,5 +82,47 @@ class ApiHeadersFilterTest {
             .andExpect(header().exists("Content-Security-Policy"))
             .andExpect(header().exists("Permissions-Policy"))
             .andExpect(header().doesNotExist("Strict-Transport-Security"))
+    }
+
+    @Test
+    fun `every api response carries the minimum frontend version`() {
+        val versioned = mvcWith("1.2.0")
+        versioned.perform(get("/api/test/ping")).andExpect(header().string("X-Min-Frontend-Version", "1.2.0"))
+        versioned.perform(post("/api/test/ping").header("X-Sticker-Bank", "1"))
+            .andExpect(header().string("X-Min-Frontend-Version", "1.2.0"))
+    }
+
+    @Test
+    fun `a rejected request still tells the client its frontend is too old`() {
+        mvcWith("1.2.0").perform(post("/api/test/ping"))
+            .andExpect(status().isForbidden)
+            .andExpect(header().string("X-Min-Frontend-Version", "1.2.0"))
+    }
+
+    @Test
+    fun `no minimum means no header, and paths outside api never get it`() {
+        mvc.perform(get("/api/test/ping")).andExpect(header().doesNotExist("X-Min-Frontend-Version"))
+        mvcWith("1.2.0").perform(post("/other/ping")).andExpect(header().doesNotExist("X-Min-Frontend-Version"))
+    }
+
+    @Test
+    fun `the minimum defaults to the server version and ignores a suffix`() {
+        assertEquals("1.2.0", ApiHeadersFilter.resolveMinFrontendVersion(null, "1.2.0"))
+        assertEquals("1.2.0", ApiHeadersFilter.resolveMinFrontendVersion("  ", "1.2.0"))
+        assertEquals("1.2.0", ApiHeadersFilter.resolveMinFrontendVersion(null, "1.2.0-rc1"))
+    }
+
+    @Test
+    fun `a dev or unparseable server version enforces nothing`() {
+        assertNull(ApiHeadersFilter.resolveMinFrontendVersion(null, "dev"))
+        assertNull(ApiHeadersFilter.resolveMinFrontendVersion("", "v1.2.0"))
+        assertNull(ApiHeadersFilter.resolveMinFrontendVersion(null, "1.2"))
+    }
+
+    @Test
+    fun `a configured minimum wins, and a malformed one fails startup`() {
+        assertEquals("1.0.0", ApiHeadersFilter.resolveMinFrontendVersion(" 1.0.0 ", "2.0.0"))
+        assertThrows<IllegalArgumentException> { ApiHeadersFilter.resolveMinFrontendVersion("latest", "2.0.0") }
+        assertThrows<IllegalArgumentException> { ApiHeadersFilter.resolveMinFrontendVersion("1.2", "2.0.0") }
     }
 }

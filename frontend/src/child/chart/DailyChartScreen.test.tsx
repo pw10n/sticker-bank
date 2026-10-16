@@ -236,6 +236,13 @@ describe('DailyChartScreen', () => {
 })
 
 describe('ChildLayout', () => {
+  it('shows the app and server versions at the bottom', async () => {
+    load()
+    setup()
+    await screen.findByText('2 of 4 done')
+    await waitFor(() => expect(screen.getByTestId('version-footer')).toHaveTextContent('App dev · Server mock'))
+  })
+
   it('switches children from the top bar', async () => {
     load()
     const router = setup()

@@ -77,7 +77,8 @@ Copy `env.example` to `.env` (gitignored; never commit it) and replace every pla
 | `SERVER_PORT` / `MANAGEMENT_SERVER_PORT` | App port (8080) and health port (8081) |
 | `STICKER_BANK_COOKIE_SECURE` | `true` always, except plain-http localhost e2e |
 | `JAVA_TOOL_OPTIONS` | JVM flags (default `-XX:MaxRAMPercentage=60`) |
-| `APP_VERSION` | Version string baked into the build |
+| `APP_VERSION` | Optional. Stamped automatically with the build time (UTC `YYYY.MMDD.HHMMSS`); set it only to pin a version. `compose.yaml` uses `dev` |
+| `STICKER_BANK_MIN_FRONTEND_VERSION` | Optional `x.y.z`. Oldest app version allowed to keep running; older ones refresh themselves. Blank means this build's own version |
 | `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` | `compose.yaml` database setup |
 | `APP_HOST_PORT` | Host port for compose (bound to 127.0.0.1) |
 | `API_PROXY_TARGET` / `E2E_BASE_URL` | Frontend dev proxy and Playwright base URL |
@@ -89,9 +90,10 @@ End-to-end stack with compose: `docker compose up --build` (reads `.env`).
 
 ```sh
 docker buildx build --platform linux/amd64,linux/arm64 \
-  --build-arg APP_VERSION=1.0.0 \
-  -t registry.example.com/sticker-bank:1.0.0 --push .
+  -t registry.example.com/sticker-bank:<new-tag> --push .
 ```
+
+The app version is stamped from the build time, so there is nothing to bump. Use a new tag every time (see `deploy/runbooks/upgrade.md`).
 
 ## Deploying
 

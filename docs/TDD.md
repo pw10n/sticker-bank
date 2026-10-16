@@ -4,9 +4,9 @@
 |---|---|
 | **Product** | Sticker Bank: a sticker / reward chart for young children |
 | **Document** | Technical Design Document |
-| **Version** | 0.5 |
+| **Version** | 0.6 |
 | **Status** | Draft |
-| **Date** | 2026-10-15 |
+| **Date** | 2026-10-16 |
 | **Implements** | [Functional Design Document v1.3](FDD.md) |
 
 > **Scope note:** This document covers **how** Sticker Bank is built: architecture, data storage, APIs, frontend, security, and deployment. **What** the app does is defined in the FDD. Requirement IDs (FR-x.y, BR-x, A-x, D-x) refer to it. Where the FDD is silent and a technical choice fills the gap, the choice is listed in §16.
@@ -20,6 +20,7 @@
 | 0.3 | 2026-10-15 | Sticker revocation from FDD v1.1 (§6.12): `REVOKED` sticker status with a live-only unique key, `sticker_revocation` log, `V4` migration, revoke via a confirmed parent undo (§7.11), new error codes, Parent Mode confirm sheet (TD-17, I-16 to I-20). |
 | 0.4 | 2026-10-15 | I'm Done! finish step from FDD v1.2 (FR-6.6 to FR-6.11). `READY_TO_FINISH` is a derived state. Completing the last task no longer earns a sticker: a new `finish` endpoint does (§7.4). A routine still Ready to finish at the end of the day is finished by lazy settlement with a `child.settled_through` watermark (§7.12). `V5` migration (`sticker.finish_mode`, `child.settled_through`, `live_sticker` refresh), `ROUTINE_NOT_READY`, I'm Done! button and parent "Finished automatically" chip, TD-18, TD-19, I-21 to I-25. A routine edit that leaves every task done no longer earns (I-3). |
 | 0.5 | 2026-10-15 | Re-earning after a revoke offers the same Sticker Pick choices (FDD v1.3: FR-12.5, FR-12.8, BR-6). `sticker_pick_choice` rows are kept after a claim and after a revoke, and the earn step copies the latest revoked sticker's rows for the same routine and day (§7.5, §7.11). No schema change. A design that was ever offered can't be deleted (I-16). |
+| 0.6 | 2026-10-16 | A stale frontend is told to refresh. Every `/api` response carries `X-Min-Frontend-Version` (the configured `STICKER_BANK_MIN_FRONTEND_VERSION`, or the server's own version), and a PWA built older than that applies the new service worker at the first safe moment instead of waiting for a foreground event, with a guarded hard-reload fallback (§8.1, §9.5, TD-20, I-26). `APP_VERSION` is now stamped automatically with the build time, once per build, so every build differs (§12.1). The child and parent pages end with a small `App … · Server …` line (§9.5). No schema or endpoint change. |
 
 ---
 
@@ -58,6 +59,7 @@ The decisions that shape the rest of the design:
 | TD-17 | Revoked stickers | Soft delete: the `sticker` row moves to status `REVOKED` and a `sticker_revocation` row records why. Uniqueness of BR-7 moves to a generated column that is `NULL` for revoked rows. | Keeps Prize Request history intact (`prize_request_item` still points at the row), keeps the audit trail for FR-12.9, and still allows exactly one live sticker per routine and day after a re-earn (BR-7). |
 | TD-18 | Ready to finish | A derived state, not a stored one: no `sticker` row and no new status. A sticker row is created only by the finish endpoint and by day settlement. | Undoing a mistaken tap stays a plain delete (FR-6.7). A stored "waiting" sticker would need revoke rules, a confirm sheet, and cleanup of its saved choices, which is exactly what the I'm Done! step is meant to avoid. |
 | TD-19 | Auto-finish at day end | Lazy settlement per child, tracked by a `child.settled_through` watermark. No scheduler. | Same reasoning as TD-10: it works if the server was down at midnight, needs no job lock when 2 replicas run, and gives the same result whenever it runs. The watermark separates "the day ended with everything done" from "a parent re-checked a past day later" (FR-6.10). |
+| TD-20 | Stale frontends | The server announces the oldest frontend build it accepts in an `X-Min-Frontend-Version` header on every `/api` response. A PWA older than that refreshes itself. | The UI and API ship in one image (TD-5), but a PWA that stays open keeps running the build it started with. Waiting for a foreground event (§9.5) let a tablet left on the chart talk to a newer server with old rules, for example finishing a routine the pre-I'm-Done! way and getting no sticker. A header on every response reaches the client on its next call, whatever the call was. |
 
 ## 3. Architecture
 
@@ -848,6 +850,7 @@ A routine that is still Ready to finish when its day ends is finished for the ch
 - JSON over HTTPS, under `/api`, with camelCase fields. Calendar days are `YYYY-MM-DD` in the family's time zone. Instants are ISO-8601 UTC.
 - Errors use RFC 9457 `application/problem+json` (Spring's built-in `ProblemDetail`) with a stable `code` field. The PWA reacts to `code`, never to message text.
 - Every write must send the header `X-Sticker-Bank: 1` (CSRF defense, §11.2).
+- Every response under `/api`, errors included, carries `X-Min-Frontend-Version: x.y.z`, the oldest frontend build the server accepts (TD-20, §9.5). It is the configured `STICKER_BANK_MIN_FRONTEND_VERSION`, or the server's own `APP_VERSION` when that is unset, and it is left out for a `dev` build.
 - Access levels: **Open** means anyone who can reach the app (Child Mode). **Parent** requires a valid parent session. **Open/Parent** is open, but a parent session changes what's allowed.
 - OpenAPI is served at `/api/openapi.json`. A backend test writes the spec to `frontend/src/api/openapi.json`, and CI fails if the committed copy is out of date.
 
@@ -1086,7 +1089,8 @@ The `/parent/*` routes sit behind a guard that calls `GET /api/parent/session` a
 
 - **Manifest:** name "Sticker Bank", `display: standalone`, `orientation: any`, `start_url` and `scope` of `/`, theme and background colors, 192 and 512 px icons plus a 512 px maskable icon, and an `apple-touch-icon`.
 - **Service worker** (vite-plugin-pwa / Workbox): precaches the app shell, fonts, sounds, and every artwork file (about 2–3 MB as 256 px WebP), so the app opens instantly and pictures never pop in. It does **not** cache API responses (§9.6).
-- **Updates:** `registerType: 'prompt'`. In Child Mode, a waiting update is applied at a safe moment (when the app comes back to the foreground, or at day rollover), never during a celebration. In Parent Mode, a "New version, reload" toast appears. The PWA compares `bootstrap.appVersion` with its own build version and checks for an update right away if they differ.
+- **Updates:** `registerType: 'prompt'`. In Child Mode, a waiting update is applied at a safe moment (when the app comes back to the foreground, or at day rollover), never during a celebration. In Parent Mode, a "New version, reload" toast appears. The PWA compares `bootstrap.appVersion` with its own build version and checks for an update right away if they differ. **Min version (TD-20):** the PWA reads `X-Min-Frontend-Version` from every API response. When its own build version (`VITE_APP_VERSION`) is older, comparing only the numeric `x.y.z`, it checks for the new service worker at once and applies it at the first safe moment: Child Mode, no celebration, and no write in flight, rather than waiting for a foreground event. If no worker is waiting after 30 s, or applying one does not reload the page (a page no worker controls, such as after a hard refresh), it unregisters the workers, clears the caches and reloads, at most once per 10 minutes so a bad minimum cannot cause a reload loop. Parent Mode never reloads on its own: the toast says the app is out of date and its Reload button does the same. A dev build, a missing header or an unparseable version never forces a reload. Builds older than this feature cannot read the header and still rely on the safe-moment rule above.
+- **Version footer:** the child layout, the parent layout and the child picker end with one small line, `App <build> · Server <bootstrap.appVersion>`. Both values are build times (TD-20), so a stale app shows two different numbers. The server value comes from bootstrap, which refetches every 30 s while the app is visible. The same value is available without the UI in `/api/bootstrap` (`appVersion`).
 - **Install:** on Android and desktop Chrome, Parent → Settings shows an Install button (`beforeinstallprompt`). On iOS, it shows "Share → Add to Home Screen" instructions. An installed iOS PWA keeps its own cookies, so its parent session is separate from Safari's.
 - **The origin must never change.** The installed app, its service worker, and the device preferences are all tied to the exact hostname. Choose it once (§12.4).
 
@@ -1179,7 +1183,7 @@ sticker-bank:
     cooldowns: [1m, 5m, 15m, 60m]
 ```
 
-Supplied through the environment: `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `JAVA_TOOL_OPTIONS`. `APP_VERSION` is baked in at build time. A Prometheus endpoint on 8081 is optional: add `micrometer-registry-prometheus` if the cluster runs Prometheus.
+Supplied through the environment: `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `JAVA_TOOL_OPTIONS`. `APP_VERSION` is stamped at build time (the build's UTC time, `YYYY.MMDD.HHMMSS`, unless pinned with `--build-arg`). A Prometheus endpoint on 8081 is optional: add `micrometer-registry-prometheus` if the cluster runs Prometheus.
 
 ### 10.4 Migrations
 
@@ -1231,14 +1235,21 @@ The only thing that ever authenticates is "a parent with the PIN". A small inter
 ```dockerfile
 # syntax=docker/dockerfile:1
 
+# 0) The version of this build: the UTC build time unless --build-arg APP_VERSION pins one. Computed once, so the PWA
+#    and the server carry the same value. The COPY makes BuildKit rerun the timestamp whenever the sources change.
+FROM --platform=$BUILDPLATFORM alpine:3 AS version
+ARG APP_VERSION=
+COPY . /context
+RUN printf '%s' "${APP_VERSION:-$(date -u +%Y.%m%d.%H%M%S)}" > /version
+
 # 1) Build the PWA (runs on the build machine's own architecture)
 FROM --platform=$BUILDPLATFORM node:24-alpine AS web
 WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY frontend/ ./
-ARG APP_VERSION=dev
-RUN VITE_APP_VERSION=$APP_VERSION npm run build              # -> /src/frontend/dist
+COPY --from=version /version /version
+RUN VITE_APP_VERSION="$(cat /version)" npm run build         # -> /src/frontend/dist
 
 # 2) Build the Spring Boot jar with the PWA inside it
 FROM --platform=$BUILDPLATFORM eclipse-temurin:25-jdk AS api
@@ -1246,9 +1257,9 @@ WORKDIR /src/backend
 COPY backend/ ./
 COPY --from=web /src/frontend/dist/ src/main/resources/static/
 COPY artwork/catalog.json src/main/resources/artwork/catalog.json
-ARG APP_VERSION=dev
+COPY --from=version /version /version
 RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew --no-daemon bootJar -PappVersion=$APP_VERSION \
+    ./gradlew --no-daemon bootJar -PappVersion="$(cat /version)" \
  && java -Djarmode=tools -jar build/libs/sticker-bank.jar extract --layers --launcher --destination /out
 
 # 3) Runtime: JRE only, non-root
@@ -1267,7 +1278,7 @@ ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
 
 - The two build stages run on the build machine's own architecture (`--platform=$BUILDPLATFORM`). JavaScript and JVM bytecode are portable, so only the small runtime stage differs per architecture. Build with `docker buildx build --platform linux/amd64,linux/arm64`.
 - Tests don't run inside the image build, because Testcontainers needs Docker. CI runs them first (§12.7).
-- Tag images with a version plus the commit (e.g. `1.4.0` and `sha-abc1234`). Never use `latest` in manifests.
+- The app version is the build time, so no two builds share one (TD-20). Tag images with a tag you have never used, such as the build time or the commit plus the time. Never use `latest` in manifests.
 
 ### 12.2 Kubernetes Resources
 
@@ -1573,6 +1584,7 @@ The FDD doesn't settle these points. This design makes the following choices.
 | I-23 | Skipped routines at day end | Not finished automatically, because a skipped routine counts as neither missed nor earned. | FR-4.5, FR-6.10 |
 | I-24 | Editing a day that has already been settled | The watermark has passed it, so the routine stays Ready to finish until a parent taps I'm Done!. This includes re-checking a task after revoking a past day's sticker. | FR-6.5, FR-6.10 |
 | I-25 | Who sees the auto-finished flag | Only a parent session (the chart `sticker.autoFinished` and History). Child Mode treats the sticker like any other unclaimed one. | FR-6.11 |
+| I-26 | Raising the minimum frontend version | Takes effect on each device's next API call. Every build has its own version (its build time), so a new deploy always raises the minimum above the previous build's. A rollback lowers it, and newer apps are fine. A minimum no served build can meet costs at most one reload per 10 minutes per device. An explicit `--build-arg APP_VERSION` replaces the timestamp and must then be raised by hand, because builds with the same version cannot be told apart. Each new version also resets the persisted offline cache (its `buster` is the build version, §9.6). | TD-20 |
 
 ## 17. Open Questions
 

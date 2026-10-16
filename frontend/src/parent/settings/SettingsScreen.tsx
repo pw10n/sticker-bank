@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { useBootstrap, useChangePin, useSettings, useUpdateSettings } from '../../api/hooks'
 import type { Settings } from '../../api/types'
-import { useDeviceSettings } from '../../app'
+import { buildVersion, useDeviceSettings } from '../../app'
 import { describePinError, formatCountdown } from '../../child/pinpad/pinErrors'
 import { Button, Card, PageHeader, Select, Spinner, TextField, Toggle } from '../../ui'
 
@@ -216,7 +216,8 @@ export default function SettingsScreen() {
 
       <Card>
         <h2 className="mb-1 text-xl font-bold">About</h2>
-        <p>Sticker Bank version {bootstrap.data?.appVersion ?? '…'}</p>
+        <p>App version {buildVersion()}</p>
+        <p>Server version {bootstrap.data?.appVersion ?? '…'}</p>
         <p>
           <a href="/licenses/" className="font-bold underline underline-offset-4">
             Open-source licenses

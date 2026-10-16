@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Navigate, NavLink, Outlet, useNavigate, useParams } from 'react-router'
 import { useBootstrap } from '../api/hooks'
-import { useDeviceSettings } from '../app'
+import { useDeviceSettings, VersionFooter } from '../app'
 import { Artwork } from '../artwork'
 import { HoldButton, Spinner, ThemeScope } from '../ui'
 
@@ -93,6 +93,7 @@ export default function ChildLayout() {
         <div className="flex-1 pb-[env(safe-area-inset-bottom)]">
           <Outlet />
         </div>
+        <VersionFooter className="py-1" />
       </div>
     </ThemeScope>
   )
