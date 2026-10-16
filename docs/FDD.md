@@ -4,7 +4,7 @@
 |---|---|
 | **Product** | Sticker Bank: a sticker / reward chart for young children |
 | **Document** | Functional Design Document |
-| **Version** | 1.1 |
+| **Version** | 1.2 |
 | **Status** | Draft |
 | **Date** | 2026-10-15 |
 
@@ -23,19 +23,20 @@
 | 0.7 | 2026-10-15 | One deployment serves one family. |
 | 1.0 | 2026-10-15 | Approved. |
 | 1.1 | 2026-10-15 | Parent can revoke an earned sticker by unchecking a task in Parent Mode. The sticker is un-earned until the routine is finished again. Replaces "stickers never un-earned" (D-2). |
+| 1.2 | 2026-10-15 | Added an **I'm Done!** confirmation. Checking the last task no longer earns the sticker. The routine becomes Ready to finish, and the child taps I'm Done! to earn it and open the Sticker Pick. Until then, tasks can be unchecked to undo a mistaken tap. A routine still Ready to finish when the day ends is finished automatically (D-15). |
 
 ---
 
 ## 1. Purpose
 
-Sticker Bank is a reward chart app for young children. Parents set up **routines**, which are groups of **tasks** (e.g. *Morning School Routine*). Each day the child sees the routines scheduled for that day. When the child finishes **every task in a routine**, they earn **one sticker** and **pick it from 3 random choices**. Stickers collect in the child's Sticker Book and can be **spent on real-world prizes**. The child picks which stickers to spend, and the parent writes down what prize was given.
+Sticker Bank is a reward chart app for young children. Parents set up **routines**, which are groups of **tasks** (e.g. *Morning School Routine*). Each day the child sees the routines scheduled for that day. When the child has checked off **every task in a routine** and taps **I'm Done!** to confirm, they earn **one sticker** and **pick it from 3 random choices**. Stickers collect in the child's Sticker Book and can be **spent on real-world prizes**. The child picks which stickers to spend, and the parent writes down what prize was given.
 
 ## 2. Users & Roles
 
 | Role | Description | Typical actions |
 |---|---|---|
 | **Parent** | Sets up and runs the app day to day. | Manage children, routines, tasks, schedules, and the Sticker Library. Complete Prize Requests. Review history and earned stickers. Revoke a sticker if a task wasn't really done. Fix mistakes. |
-| **Child** | Toddler or young child, usually guided by a parent. | Taps tasks to mark them done. Picks a sticker when a routine is finished. Looks at their Sticker Book. Picks stickers to spend on a prize. |
+| **Child** | Toddler or young child, usually guided by a parent. | Taps tasks to mark them done, then taps I'm Done! when a routine is complete. Picks a sticker. Looks at their Sticker Book. Picks stickers to spend on a prize. |
 | **Admin** | Runs the deployment (usually a parent with technical access). Not a day-to-day user. | Resets the family's PIN when it's forgotten. |
 
 ## 3. Assumptions
@@ -56,9 +57,11 @@ Sticker Bank is a reward chart app for young children. Parents set up **routines
 | **Routine** | A named, ordered group of tasks for one child, scheduled on certain days of the week. |
 | **Task** | One step in a routine, shown as text plus an icon (e.g. 🪥 "Brush teeth"). Every task belongs to exactly one routine. |
 | **Daily Chart** | A child's routines and tasks scheduled for one calendar day. |
-| **Sticker** | A design (image plus name) in the Sticker Library. A child earns one when every task in a routine is done for that day. All stickers are worth the same. |
+| **Ready to finish** | A routine whose tasks are all checked but whose **I'm Done!** button hasn't been tapped yet. No sticker is earned at this point, and tasks can still be unchecked. |
+| **I'm Done!** | The confirmation button a routine shows once it is Ready to finish. Tapping it **finishes** the routine: the sticker is earned, the routine locks, and the Sticker Pick opens. If the day ends first, the routine is finished automatically. |
+| **Sticker** | A design (image plus name) in the Sticker Library. A child earns one when every task in a routine is done for that day and the routine is finished (**I'm Done!** tapped, or the day ends). All stickers are worth the same. |
 | **Sticker Library** | The set of sticker designs, managed by the parent and shared by all children. Only **active** stickers can be offered as choices. |
-| **Sticker Pick** | The moment a child chooses 1 of 3 randomly offered stickers after finishing a routine. |
+| **Sticker Pick** | The moment a child chooses 1 of 3 randomly offered stickers after a routine is finished. |
 | **Sticker Book** | The child's collection of every sticker earned, including spent ones. |
 | **Sticker status** | Each earned sticker is **Available** (can be spent), **Pending** (part of an open Prize Request), or **Used** (spent on a prize). |
 | **Revoke** | A parent action (Parent Mode only) that unchecks a completed task in a routine that already earned its sticker. The sticker is removed (un-earned) until every task in the routine is done again. |
@@ -69,10 +72,26 @@ Sticker Bank is a reward chart app for young children. Parents set up **routines
 ### 5.1 Earning a Sticker
 
 1. The child opens the app (Child Mode) and sees today's Daily Chart.
-2. The child taps tasks in a routine to mark them done (any order).
-3. When the last task is done, the routine earns a sticker and locks for the day.
-4. A celebration plays, then a **Sticker Pick** shows 3 random stickers.
-5. The child taps one. It is added to the Sticker Book as **Available**.
+2. The child taps tasks in a routine to mark them done (any order). Tapping a done task again undoes it.
+3. When the last task is checked, the routine becomes **Ready to finish**. A large **I'm Done!** button appears. No sticker is earned yet.
+4. If a task was tapped by mistake, the child taps it again to undo it. The I'm Done! button goes away until every task is checked again.
+5. The child taps **I'm Done!**. The routine earns its sticker and locks for the day.
+6. A celebration plays, then a **Sticker Pick** shows 3 random stickers.
+7. The child taps one. It is added to the Sticker Book as **Available**.
+
+A routine moves through these states each day:
+
+```mermaid
+stateDiagram-v2
+    [*] --> InProgress: Day starts
+    InProgress --> ReadyToFinish: Last task checked (FR-6.6)
+    ReadyToFinish --> InProgress: A task is unchecked (FR-6.7)
+    ReadyToFinish --> Finished: I'm Done! tapped (FR-6.8)
+    ReadyToFinish --> Finished: Day ends (FR-6.10)
+    Finished --> InProgress: Parent revokes (FR-12.4)
+```
+
+Only a **Finished** routine has earned a sticker. If the day ends while a routine is Ready to finish, it is finished automatically (FR-6.10).
 
 ### 5.2 Spending Stickers
 
@@ -103,7 +122,8 @@ A revoked sticker is removed from the Sticker Book. Used stickers can't be revok
 2. The parent taps a completed task in a routine that earned a sticker (e.g. "Brush teeth" wasn't actually done).
 3. The app asks the parent to confirm, showing the sticker that will be removed.
 4. On confirm, the task is unchecked, the sticker is removed from the Sticker Book, and the routine is no longer finished.
-5. The child does the task and taps it again (today), or the parent re-checks it (past day). When every task is done, the routine earns a sticker again and a new **Sticker Pick** opens.
+5. The child does the task and taps it again (today), or the parent re-checks it (past day). When every task is done, the routine is Ready to finish again.
+6. The child taps **I'm Done!** (today), or the parent does (past day). The routine earns a sticker again and a new **Sticker Pick** opens. (If the child never taps it, the routine finishes automatically when the day ends.)
 
 ### 5.5 Forgotten PIN
 
@@ -166,7 +186,7 @@ Priority: **M** = Must (v1 / MVP), **S** = Should (v1 if time allows), **C** = C
 | FR-5.1 | The main screen shows today's Daily Chart for the selected child: every routine scheduled today, in order, with its tasks. | M |
 | FR-5.2 | Each task shows its icon and text label in a large, easy-to-tap format suited to toddlers. | M |
 | FR-5.3 | Each routine shows its progress (e.g. "2 of 4 done", or a progress bar or ring). | M |
-| FR-5.4 | A routine with all tasks done looks clearly finished and shows the sticker it earned. | M |
+| FR-5.4 | A routine that is **finished** (I'm Done! tapped) looks clearly finished and shows the sticker it earned. A routine that is only Ready to finish shows the I'm Done! button instead (FR-6.6). | M |
 | FR-5.5 | If nothing is scheduled today, the screen shows a friendly empty state. | M |
 | FR-5.6 | The chart can highlight the routine that matters right now (e.g. Morning in the morning) or collapse finished routines. | S |
 | FR-5.7 | Siblings view: a side-by-side summary of each child's progress today. | C |
@@ -176,19 +196,25 @@ Priority: **M** = Must (v1 / MVP), **S** = Should (v1 if time allows), **C** = C
 | ID | Requirement | Pri |
 |---|---|---|
 | FR-6.1 | Tapping a task marks it done for today. Completed tasks look clearly different (e.g. checkmark, color fill). | M |
-| FR-6.2 | Tapping a completed task undoes it, **until the routine earns its sticker**. After that, the routine is locked as finished in Child Mode for the rest of the day (see FR-7.4). Only a parent can unlock it, by revoking the sticker (§6.12). | M |
+| FR-6.2 | Tapping a completed task undoes it, **until the routine is finished** (the child taps I'm Done!, FR-6.8, or the day ends, FR-6.10) and it earns its sticker. After that, the routine is locked as finished in Child Mode for the rest of the day (see FR-7.4). Only a parent can unlock it, by revoking the sticker (§6.12). | M |
 | FR-6.3 | Tasks can be completed in any order. | M |
 | FR-6.4 | Completing a task gives a small celebration (animation and/or sound). | S |
-| FR-6.5 | In Parent Mode, the parent can mark tasks done for **past days** (e.g. forgot to tap yesterday). Finishing a past routine this way earns its sticker. Unchecking a task in a routine that already earned a sticker is a revoke (§6.12). | S |
+| FR-6.5 | In Parent Mode, the parent can mark tasks done for **past days** (e.g. forgot to tap yesterday) and finish the routine with the same **I'm Done!** button, which earns its sticker. Unchecking a task in a routine that already earned a sticker is a revoke (§6.12). | S |
+| FR-6.6 | When the last task in a routine is checked, the routine becomes **Ready to finish**. It shows a large **I'm Done!** button (text plus an icon, sized for a toddler) and does not earn a sticker yet. The button is clearly separate from the task list, so the tap that checked the last task can't also hit it. | M |
+| FR-6.7 | While a routine is Ready to finish, its tasks can still be tapped. Unchecking any task puts the routine back in progress (e.g. "3 of 4 done") and hides the I'm Done! button. Checking every task again brings it back. This is how a task tapped by mistake gets undone. | M |
+| FR-6.8 | Tapping **I'm Done!** finishes the routine. It earns its sticker (FR-7.1), its tasks lock (FR-7.4), the celebration plays (FR-7.2), and the Sticker Pick opens (FR-7.7). The child can't take this back. Only a parent can, by revoking the sticker (§6.12). | M |
+| FR-6.9 | A routine stays Ready to finish, with its tasks checked and the I'm Done! button showing, if the child leaves the screen or the app is closed or reloaded. It stays that way until I'm Done! is tapped or the day ends. | M |
+| FR-6.10 | If the day ends (local midnight, FR-4.4) while a routine is Ready to finish, the routine is **finished automatically**. It earns its sticker and locks, as if I'm Done! had been tapped, but with no celebration. The sticker is **unclaimed** (FR-7.10), and the child picks it the next time they open the app. This applies only when a day ends, so a parent finishes a past day they edit afterward with I'm Done! (FR-6.5). | M |
+| FR-6.11 | A sticker earned by automatic finish is marked as such in the parent's sticker review (FR-12.1) and in History, so the parent can check that the tasks were really done and revoke the sticker if not (§6.12). | S |
 
 ### 6.7 Earning Stickers
 
 | ID | Requirement | Pri |
 |---|---|---|
-| FR-7.1 | When **every** task in a routine is done for the day, the child earns **one sticker** for that routine and day. There is no partial credit: skipping or missing any task means no sticker. | M |
-| FR-7.2 | Earning a sticker triggers a bigger celebration (e.g. full-screen reveal, confetti, sound). | M |
+| FR-7.1 | When **every** task in a routine is done for the day **and the routine is finished** (I'm Done! tapped, FR-6.8, or the day ends, FR-6.10), the child earns **one sticker** for that routine and day. Checking the last task alone doesn't earn it. There is no partial credit: skipping or missing any task means no sticker. | M |
+| FR-7.2 | Tapping I'm Done! triggers a bigger celebration (e.g. full-screen reveal, confetti, sound). Checking the last task gets only the small celebration in FR-6.4, and an automatic finish (FR-6.10) has none. | M |
 | FR-7.3 | A routine can earn **at most one** sticker per day. | M |
-| FR-7.4 | Once a routine earns its sticker, its tasks are locked as done for that day **in Child Mode**. The child can't uncheck them. Only a parent can take the sticker back, by revoking it in Parent Mode (§6.12). | M |
+| FR-7.4 | Once a routine is finished and has earned its sticker, its tasks are locked as done for that day **in Child Mode**. The child can't uncheck them. Only a parent can take the sticker back, by revoking it in Parent Mode (§6.12). | M |
 | FR-7.5 | Each child has a **Sticker Book** showing every sticker earned, grouped by date. Each entry shows the sticker and the routine and date it was earned for. | M |
 | FR-7.6 | The Sticker Book shows counts for **Available**, **Pending**, and **Used** stickers, plus total earned. | M |
 | FR-7.7 | **Sticker Pick:** after the celebration, the child is shown **3 different stickers, picked at random** from the active stickers in the Sticker Library. Duplicates of stickers the child already has are allowed. | M |
@@ -283,7 +309,7 @@ A parent can take back a sticker if the child didn't really finish a task. Revok
 | FR-12.2 | In Parent Mode, the parent can **uncheck** a completed task in a routine that already earned its sticker, for today or a past day. This is the only way to revoke a sticker. | M |
 | FR-12.3 | Before revoking, the app asks for confirmation and shows the sticker that will be removed and the task being unchecked. On confirm, the task is unchecked and the sticker is **un-earned**: it is removed from the Sticker Book and no longer counts toward any total. | M |
 | FR-12.4 | After a revoke, the routine is **no longer finished** for that day. It unlocks and shows its normal progress (e.g. "3 of 4 done"). Other tasks stay checked. | M |
-| FR-12.5 | The sticker can be **earned again** for that routine and day once every task is done again: by the child in Child Mode (today only) or by the parent in Parent Mode (today or a past day, FR-6.5). Re-earning opens a new Sticker Pick with **new random choices**. | M |
+| FR-12.5 | The sticker can be **earned again** for that routine and day once every task is done again and the routine is finished again (FR-6.8, FR-6.10): by the child in Child Mode (today only) or by the parent in Parent Mode (today or a past day, FR-6.5). Re-earning opens a new Sticker Pick with **new random choices**. | M |
 | FR-12.6 | If the sticker is **Pending** in a Prize Request, the confirmation says so. Revoking removes it from that request. If the request is left with no stickers, it is cancelled automatically. | M |
 | FR-12.7 | A **Used** sticker can't be revoked, because the prize was already given. The app explains this. (If request reversal, FR-11.14, is available, the parent can reverse the request first and then revoke.) | M |
 | FR-12.8 | If the sticker is still **unclaimed** (Sticker Pick not yet made), revoking discards its saved choices and removes the "Pick your sticker!" button. | M |
@@ -300,7 +326,7 @@ A parent can take back a sticker if the child didn't really finish a task. Revok
 | BR-3 | Deleting a task or routine never deletes stickers already earned. |
 | BR-4 | Past days are read-only in Child Mode. |
 | BR-5 | Tasks can't be completed for future days. |
-| BR-6 | The 3 Sticker Pick choices are generated once, when the routine is finished, and saved. Closing and reopening never produces new choices. A revoke (§6.12) discards them, and re-finishing the routine generates new ones. |
+| BR-6 | The 3 Sticker Pick choices are generated once, when the routine is finished (I'm Done! tapped, or automatically when the day ends), and saved. Closing and reopening never produces new choices. A revoke (§6.12) discards them, and re-finishing the routine generates new ones. |
 | BR-7 | **No double earning:** each child × routine × date can hold at most one earned sticker at a time, however it's completed (by the child, or by the parent fixing a past day). After a revoke, it can be earned again, but never more than one at once. |
 | BR-8 | If a sticker is retired or edited while it's waiting as an unclaimed choice, it is still shown with its latest image and name, and can still be picked. |
 | BR-9 | Retiring or editing stickers never removes anything from a child's Sticker Book. |
@@ -312,6 +338,8 @@ A parent can take back a sticker if the child didn't really finish a task. Revok
 | BR-15 | A sticker design can't be deleted from the library if any child has earned it, whatever its status. |
 | BR-16 | Only a parent can revoke a sticker, and only by unchecking a task in Parent Mode. Child Mode can never uncheck a task in a routine that earned its sticker. |
 | BR-17 | A revoked sticker is fully un-earned: it leaves the Sticker Book, the Available/Pending/Used/total counts, and any Pending Prize Request. Used stickers can't be revoked. |
+| BR-18 | **Explicit finish.** A routine earns its sticker only when I'm Done! is tapped (by the child in Child Mode or by a parent in Parent Mode) or when the day ends with the routine Ready to finish (FR-6.10). Checking the last task never earns it on its own. This also holds when a routine edit (BR-2) leaves every remaining task done: the routine becomes Ready to finish, not finished. |
+| BR-19 | A routine that is Ready to finish has no sticker and no saved Sticker Pick choices (BR-6). Its tasks can be unchecked freely (in Child Mode today, or in Parent Mode), with no confirmation and no revoke. If the day ends first, it is finished automatically (FR-6.10). |
 
 ## 8. Out of Scope (v1)
 
@@ -344,6 +372,7 @@ A parent can take back a sticker if the child didn't really finish a task. Revok
 | D-12 | Parent gate | 4-digit PIN. | FR-8.3 to FR-8.7 |
 | D-13 | PIN recovery | Admin reset only. | FR-8.8 to FR-8.10 |
 | D-14 | Tenancy | One deployment serves one family. | A-1, A-2 |
+| D-15 | Finish confirmation | Checking the last task doesn't earn the sticker. The routine becomes Ready to finish, and the child taps **I'm Done!** first, so a task tapped by mistake can be undone before the routine locks. There is no timer. If the child never taps it, the routine is finished automatically when the day ends, so a forgotten tap never costs the child a sticker. The parent can see which stickers were auto-finished and revoke them. | FR-6.6 to FR-6.11, BR-18, BR-19 |
 
 ## 10. Future Considerations
 

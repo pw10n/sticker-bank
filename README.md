@@ -58,6 +58,10 @@ npm run e2e                            # Playwright; needs a running stack
 
 Integration tests need a container runtime and are skipped without one.
 
+### Finishing a routine (I'm Done!)
+
+Checking the last task of a routine does not earn the sticker. The routine becomes **Ready to finish** and shows a big **I'm Done!** button, so a child can tap a task again to undo a mistaken tap. Tapping **I'm Done!** earns the sticker, locks the routine and opens the Sticker Pick. If the day ends before the button is tapped, the routine is finished automatically: the sticker waits in the child's "Stickers to pick" tray, and Parent Mode marks it "Finished automatically" so you can check the tasks and take it back if they weren't done. This happens lazily, the first time the app is used after midnight, so no scheduled job is needed. A parent who checks off a past day finishes it with the same **I'm Done!** button in History.
+
 ### Taking a sticker back (Parent Mode)
 
 Open History, pick a day (today or past), and tap **Uncheck** on a done task in a finished routine. The "Remove this sticker?" sheet takes an optional note; confirm with **Remove sticker**. The sticker is marked removed (kept in history, struck through in prize history) and taken out of a waiting prize request; a request left with no stickers is cancelled as "Cancelled: stickers removed". The routine reopens, and redoing the task earns a new sticker with fresh choices. Spent (Used) stickers can't be removed. Every removal, with its note, is listed in History. Child Mode can never uncheck a finished routine. Designs that were ever earned, even if later removed, can't be deleted from the library, only retired.
