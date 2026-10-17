@@ -4,9 +4,9 @@
 |---|---|
 | **Product** | Sticker Bank: a sticker / reward chart for young children |
 | **Document** | Functional Design Document |
-| **Version** | 1.3 |
+| **Version** | 1.4 |
 | **Status** | Draft |
-| **Date** | 2026-10-15 |
+| **Date** | 2026-10-17 |
 
 > **Scope note:** This document covers **functional** behavior only. Technology choices, architecture, data storage, and APIs are covered in a separate technical design document.
 
@@ -25,6 +25,7 @@
 | 1.1 | 2026-10-15 | Parent can revoke an earned sticker by unchecking a task in Parent Mode. The sticker is un-earned until the routine is finished again. Replaces "stickers never un-earned" (D-2). |
 | 1.2 | 2026-10-15 | Added an **I'm Done!** confirmation. Checking the last task no longer earns the sticker. The routine becomes Ready to finish, and the child taps I'm Done! to earn it and open the Sticker Pick. Until then, tasks can be unchecked to undo a mistaken tap. A routine still Ready to finish when the day ends is finished automatically (D-15). |
 | 1.3 | 2026-10-15 | Re-earning a revoked sticker offers the **same 3 choices** as before, instead of a new random draw (FR-12.5, FR-12.8, BR-6, D-5). A design that was ever offered in a Sticker Pick can't be deleted, only retired (FR-10.6, BR-15). |
+| 1.4 | 2026-10-17 | The child switcher shows names: the current child's name is always visible, and opening the switcher lists every child by name (FR-1.6). |
 
 ---
 
@@ -145,7 +146,7 @@ Priority: **M** = Must (v1 / MVP), **S** = Should (v1 if time allows), **C** = C
 | FR-1.3 | Parent can edit and delete a child profile. Deleting requires confirmation and removes that child's history, stickers, and Prize Requests. | M |
 | FR-1.4 | Parent can archive a child profile (hide it but keep history). | C |
 | FR-1.5 | The app supports multiple children. Each child's routines, completions, stickers, and Prize Requests are kept separately. | M |
-| FR-1.6 | Parent can switch between children quickly from the main screen. | M |
+| FR-1.6 | Parent can switch between children quickly from the main screen. The current child's name is always shown, and the switcher lists every child by name (with avatar) so siblings are told apart by name, not only by picture. | M |
 
 ### 6.2 Routine Management
 

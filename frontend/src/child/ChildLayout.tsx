@@ -1,68 +1,119 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, NavLink, Outlet, useNavigate, useParams } from 'react-router'
 import { useBootstrap } from '../api/hooks'
 import { useDeviceSettings, VersionFooter } from '../app'
 import { Artwork } from '../artwork'
 import { HoldButton, Spinner, ThemeScope } from '../ui'
 
-// One-row header thresholds by child count (container width). Each avatar adds
-// 72 + 16 px, so the width at which avatars, page links and Parent Mode fit on
-// one row grows with the number of children: compact pills need about
-// 88 * N + 460 px, large labels about 88 * N + 750 px, each plus ~90 px of
-// slack. Tailwind needs literal class names, hence the table. Below the
-// threshold the header is two rows and the avatars wrap inside their cluster.
-const ROW_CLASSES = {
-  // 1-2 children: one row from 45rem, large labels from 64rem
-  a: {
-    nav: '@[45rem]:flex-none @[45rem]:flex-nowrap',
-    pages: '@[45rem]:order-2 @[45rem]:flex @[45rem]:w-auto @[45rem]:flex-1 @[45rem]:justify-center',
-    pill: '@[45rem]:px-2',
-    parent: '@[45rem]:order-3 @[45rem]:self-center',
-    big: '@[64rem]:px-5 @[64rem]:text-[1.35rem] @[64rem]:flex-row @[64rem]:gap-2',
-  },
-  // 3 children: 51rem / 70rem
-  b: {
-    nav: '@[51rem]:flex-none @[51rem]:flex-nowrap',
-    pages: '@[51rem]:order-2 @[51rem]:flex @[51rem]:w-auto @[51rem]:flex-1 @[51rem]:justify-center',
-    pill: '@[51rem]:px-2',
-    parent: '@[51rem]:order-3 @[51rem]:self-center',
-    big: '@[70rem]:px-5 @[70rem]:text-[1.35rem] @[70rem]:flex-row @[70rem]:gap-2',
-  },
-  // 4 children: 57rem / 75rem
-  c: {
-    nav: '@[57rem]:flex-none @[57rem]:flex-nowrap',
-    pages: '@[57rem]:order-2 @[57rem]:flex @[57rem]:w-auto @[57rem]:flex-1 @[57rem]:justify-center',
-    pill: '@[57rem]:px-2',
-    parent: '@[57rem]:order-3 @[57rem]:self-center',
-    big: '@[75rem]:px-5 @[75rem]:text-[1.35rem] @[75rem]:flex-row @[75rem]:gap-2',
-  },
-  // 5 children: 62rem / 81rem
-  d: {
-    nav: '@[62rem]:flex-none @[62rem]:flex-nowrap',
-    pages: '@[62rem]:order-2 @[62rem]:flex @[62rem]:w-auto @[62rem]:flex-1 @[62rem]:justify-center',
-    pill: '@[62rem]:px-2',
-    parent: '@[62rem]:order-3 @[62rem]:self-center',
-    big: '@[81rem]:px-5 @[81rem]:text-[1.35rem] @[81rem]:flex-row @[81rem]:gap-2',
-  },
-  // 6 or more children: 72rem / 96rem
-  e: {
-    nav: '@[72rem]:flex-none @[72rem]:flex-nowrap',
-    pages: '@[72rem]:order-2 @[72rem]:flex @[72rem]:w-auto @[72rem]:flex-1 @[72rem]:justify-center',
-    pill: '@[72rem]:px-2',
-    parent: '@[72rem]:order-3 @[72rem]:self-center',
-    big: '@[96rem]:px-5 @[96rem]:text-[1.35rem] @[96rem]:flex-row @[96rem]:gap-2',
-  },
-  // 8 or more children: always two rows, so Parent Mode stays top-right however many avatars wrap
-  f: { nav: '', pages: '', pill: '', parent: '', big: '' },
-} as const
+// The switcher is one fixed-size chip (the other children live in a popover), so
+// the header's width no longer depends on the child count. Below 51rem the header
+// is two rows; from 51rem avatars, page links and Parent Mode share one row, and
+// from 70rem the page links get large labels. Tailwind needs literal class names.
+const ROW = {
+  nav: '@[51rem]:flex-none @[51rem]:flex-nowrap',
+  pages: '@[51rem]:order-2 @[51rem]:flex @[51rem]:w-auto @[51rem]:flex-1 @[51rem]:justify-center',
+  pill: '@[51rem]:px-2',
+  parent: '@[51rem]:order-3 @[51rem]:self-center',
+  big: '@[70rem]:px-5 @[70rem]:text-[1.35rem] @[70rem]:flex-row @[70rem]:gap-2',
+}
 
-function rowClasses(count: number) {
-  if (count <= 2) return ROW_CLASSES.a
-  if (count === 3) return ROW_CLASSES.b
-  if (count === 4) return ROW_CLASSES.c
-  if (count === 5) return ROW_CLASSES.d
-  if (count <= 7) return ROW_CLASSES.e
-  return ROW_CLASSES.f
+type Kid = { id: number; name: string; themeColor: string; avatarKey: string }
+
+function Avatar({ c }: { c: Kid }) {
+  return (
+    <span
+      style={{ backgroundColor: c.themeColor }}
+      className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full border-4 border-ink/30"
+    >
+      <Artwork artKey={c.avatarKey} size={40} decorative />
+    </span>
+  )
+}
+
+const FOCUS = 'focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink'
+
+// Shows the current child's name; tapping opens a list of everyone's names to switch to.
+function ChildSwitcher({ kids, current, onSwitch }: { kids: Kid[]; current: Kid; onSwitch: (id: number) => void }) {
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+  const toggle = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onPointer = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        toggle.current?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const chip = (
+    <>
+      <Avatar c={current} />
+      <span className="min-w-0 truncate text-xl font-bold">{current.name}</span>
+    </>
+  )
+  const chipClass =
+    'flex min-h-[72px] max-w-[14rem] touch-manipulation items-center gap-3 rounded-full border-4 border-ink bg-white py-1 pl-2 pr-5 text-ink'
+
+  if (kids.length < 2) return <div className={chipClass}>{chip}</div>
+
+  return (
+    <div ref={root} className="relative">
+      <button
+        ref={toggle}
+        type="button"
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-label={`${current.name}, switch child`}
+        onClick={() => setOpen((o) => !o)}
+        className={`${chipClass} ${FOCUS}`}
+      >
+        {chip}
+        <span aria-hidden="true" className="text-lg">
+          {open ? '▲' : '▼'}
+        </span>
+      </button>
+      {open ? (
+        <ul
+          aria-label="Who is playing"
+          className="absolute left-0 top-full z-20 mt-2 flex max-h-[70dvh] min-w-full flex-col gap-2 overflow-y-auto rounded-3xl border-4 border-ink bg-white p-2 shadow-[0_8px_0_rgba(27,27,47,0.2)]"
+        >
+          {kids.map((c) => {
+            const isCurrent = c.id === current.id
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  aria-current={isCurrent ? 'true' : undefined}
+                  onClick={() => {
+                    setOpen(false)
+                    if (!isCurrent) onSwitch(c.id)
+                  }}
+                  className={`flex min-h-[72px] w-full touch-manipulation items-center gap-3 whitespace-nowrap rounded-full border-4 py-1 pl-2 pr-5 text-left text-xl font-bold text-ink ${
+                    isCurrent ? 'border-ink bg-[var(--child-color-soft)]' : 'border-transparent'
+                  } ${FOCUS}`}
+                >
+                  <Avatar c={c} />
+                  <span>{c.name}</span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      ) : null}
+    </div>
+  )
 }
 
 export default function ChildLayout() {
@@ -88,7 +139,8 @@ export default function ChildLayout() {
   }
   if (!child) return <Navigate to="/" replace />
 
-  const row = rowClasses(data.children.length)
+  const row = ROW
+  const kids = [...data.children].sort((a, b) => a.position - b.position)
   const nav = [
     { to: `/c/${child.id}`, end: true, icon: '⭐', label: 'My chart' },
     {
@@ -114,26 +166,7 @@ export default function ChildLayout() {
               aria-label="Who is playing"
               className={`order-1 flex min-w-0 flex-1 flex-wrap items-center gap-4 ${row.nav}`}
             >
-              {data.children.map((c) => {
-                const current = c.id === child.id
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    aria-label={c.name}
-                    aria-current={current ? 'true' : undefined}
-                    onClick={() => {
-                      if (!current) navigate(`/c/${c.id}`)
-                    }}
-                    style={{ backgroundColor: c.themeColor }}
-                    className={`flex h-[72px] w-[72px] touch-manipulation items-center justify-center rounded-full border-4 ${
-                      current ? 'border-ink ring-4 ring-white' : 'border-ink/30'
-                    } focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink`}
-                  >
-                    <Artwork artKey={c.avatarKey} size={48} decorative />
-                  </button>
-                )
-              })}
+              <ChildSwitcher kids={kids} current={child} onSwitch={(id) => navigate(`/c/${id}`)} />
             </nav>
             <nav aria-label="Pages" className={`order-3 grid w-full grid-cols-3 gap-4 ${row.pages}`}>
               {nav.map((n) => (
