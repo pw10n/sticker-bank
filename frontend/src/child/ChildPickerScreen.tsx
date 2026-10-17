@@ -31,7 +31,7 @@ export default function ChildPickerScreen() {
   }
 
   return (
-    <main className="flex min-h-dvh flex-col bg-paper p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-ink">
+    <main className="flex min-h-dvh flex-col bg-paper p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-ink [@media(max-height:500px)]:pb-[max(0.5rem,env(safe-area-inset-bottom))] [@media(max-height:500px)]:pt-[max(0.5rem,env(safe-area-inset-top))]">
       <div>
         <div className="mx-auto flex max-w-4xl justify-end">
           <HoldButton
@@ -49,9 +49,9 @@ export default function ChildPickerScreen() {
             <EmptyState icon="🌈" title="Ask a grown-up to add you!" />
           </div>
         ) : (
-          <div className="mx-auto flex max-w-4xl flex-col items-center gap-8">
-            <h1 className="text-4xl font-bold">Who is playing?</h1>
-            <ul className="grid w-full grid-cols-1 gap-6 sm:grid-cols-2">
+          <div className="mx-auto flex max-w-4xl flex-col items-center gap-8 [@media(max-height:500px)]:gap-2">
+            <h1 className="text-4xl font-bold [@media(max-height:500px)]:text-2xl">Who is playing?</h1>
+            <ul className="grid w-full grid-cols-1 gap-6 sm:grid-cols-2 [@media(max-height:500px)]:gap-4">
               {[...children]
                 .sort((a, b) => a.position - b.position)
                 .map((c) => (
@@ -63,7 +63,7 @@ export default function ChildPickerScreen() {
                         navigate(`/c/${c.id}`)
                       }}
                       style={{ backgroundColor: c.themeColor }}
-                      className="flex min-h-[160px] w-full touch-manipulation select-none flex-col items-center justify-center gap-3 rounded-[2.5rem] border-4 border-ink p-6 text-[1.75rem] font-bold text-ink shadow-[0_8px_0_rgba(27,27,47,0.2)] focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-ink"
+                      className="flex min-h-[160px] w-full [@media(max-height:500px)]:min-h-[72px] touch-manipulation select-none flex-col items-center justify-center gap-3 [@media(max-height:500px)]:gap-1 rounded-[2.5rem] border-4 border-ink p-6 [@media(max-height:500px)]:p-3 text-[1.75rem] font-bold text-ink shadow-[0_8px_0_rgba(27,27,47,0.2)] focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-ink"
                     >
                       <span className="flex h-28 w-28 items-center justify-center rounded-full bg-white/80">
                         <Artwork artKey={c.avatarKey} size={96} decorative />
@@ -76,7 +76,7 @@ export default function ChildPickerScreen() {
           </div>
         )}
       </div>
-      <VersionFooter className="mt-auto pt-8" />
+      <VersionFooter className="mt-auto pt-8 [@media(max-height:500px)]:pt-2" />
     </main>
   )
 }

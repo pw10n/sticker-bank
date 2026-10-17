@@ -115,27 +115,30 @@ export default function DailyChartScreen() {
     )
   }
 
+  // Routine cards are 23rem wide at minimum and grow to 28rem: 1 column below 760px of content, 2 from 760px, 3 from 1152px;
+  // a lone last card centres under the row above.
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 p-4 sm:p-6" style={{ touchAction: 'manipulation' }}>
       <UnclaimedTray items={chart.unclaimedFromEarlierDays} childId={childId} today={chart.date} />
       {visible.length === 0 ? (
         <EmptyState icon="🎈" title="No routines today — time to play! 🎈" />
       ) : (
-        <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className="flex flex-wrap items-start justify-center gap-6">
           {visible.map((r) => (
-            <RoutineCard
-              key={r.routineId}
-              routine={r}
-              childId={childId}
-              childColor={childColor}
-              highlighted={r.routineId === focusId}
-              canWrite={canWrite}
-              pendingTaskIds={pending}
-              finishing={finishingId === r.routineId}
-              onToggle={onToggle}
-              onFinish={onFinish}
-              cardRef={r.routineId === focusId ? focusRef : undefined}
-            />
+            <div key={r.routineId} className="min-w-[min(100%,23rem)] max-w-[28rem] grow basis-[23rem]">
+              <RoutineCard
+                routine={r}
+                childId={childId}
+                childColor={childColor}
+                highlighted={r.routineId === focusId}
+                canWrite={canWrite}
+                pendingTaskIds={pending}
+                finishing={finishingId === r.routineId}
+                onToggle={onToggle}
+                onFinish={onFinish}
+                cardRef={r.routineId === focusId ? focusRef : undefined}
+              />
+            </div>
           ))}
         </div>
       )}

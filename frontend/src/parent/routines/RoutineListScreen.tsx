@@ -166,7 +166,7 @@ export default function RoutineListScreen() {
                         {handle}
                         <Artwork artKey={r.iconKey} size={48} decorative />
                         <div className="min-w-0 flex-1">
-                          <h2 className="truncate text-xl font-bold">{r.name}</h2>
+                          <h2 className="break-words text-xl font-bold">{r.name}</h2>
                           <p className="text-base">
                             {scheduleSummary(r.days)} · {r.tasks.length} {r.tasks.length === 1 ? 'task' : 'tasks'}
                           </p>

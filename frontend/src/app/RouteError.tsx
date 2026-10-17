@@ -31,11 +31,11 @@ export default function RouteError() {
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="min-h-16 rounded-full bg-ink px-8 py-3 text-xl font-bold text-paper"
+          className="min-h-[72px] rounded-full bg-ink px-8 py-3 text-xl font-bold text-paper"
         >
           Try again
         </button>
-        <Link to="/" className="min-h-16 rounded-full border-4 border-ink px-8 py-3 text-xl font-bold text-ink">
+        <Link to="/" className="inline-flex min-h-[72px] items-center justify-center rounded-full border-4 border-ink px-8 py-3 text-xl font-bold text-ink">
           Go home
         </Link>
       </div>

@@ -49,7 +49,7 @@ export function OfflineBanner() {
   return (
     <div
       role="status"
-      className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-2 bg-paper px-4 py-2 text-center font-semibold text-ink shadow"
+      className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-2 bg-paper px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] text-center font-semibold text-ink shadow"
     >
       <span aria-hidden="true">☁️</span>
       <span>Waiting for Wi-Fi…</span>

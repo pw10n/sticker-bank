@@ -141,9 +141,9 @@ export function PinPad({ title, subtitle, onComplete, error, busy = false, locke
       aria-labelledby={titleId}
       tabIndex={-1}
       onKeyDown={onKeyDown}
-      className="mx-auto flex w-full max-w-sm flex-col items-center gap-5 rounded-[2rem] bg-white p-6 text-ink shadow-[0_6px_0_rgba(27,27,47,0.1)] outline-none"
+      className="mx-auto flex w-full max-w-sm flex-col items-center gap-5 rounded-[2rem] bg-white p-6 text-ink [@media(min-height:521px)_and_(max-height:860px)]:gap-4 [@media(min-height:521px)_and_(max-height:860px)]:p-4 shadow-[0_6px_0_rgba(27,27,47,0.1)] outline-none [@media(max-height:520px)]:grid [@media(max-height:520px)]:max-w-[30rem] [@media(max-height:520px)]:grid-cols-[1fr_auto] [@media(max-height:520px)]:grid-rows-[auto_auto_1fr_auto] [@media(max-height:520px)]:items-center [@media(max-height:520px)]:gap-x-4 [@media(max-height:520px)]:gap-y-2 [@media(max-height:520px)]:rounded-3xl [@media(max-height:520px)]:p-2"
     >
-      <div className="text-center">
+      <div className="text-center [@media(max-height:520px)]:col-start-1">
         <h1 id={titleId} className="text-2xl font-bold">
           {title}
         </h1>
@@ -156,7 +156,7 @@ export function PinPad({ title, subtitle, onComplete, error, busy = false, locke
         transition={{ duration: 0.45 }}
         role="img"
         aria-label={`${shown} of ${PIN_LENGTH} digits entered`}
-        className="flex gap-4"
+        className="flex gap-4 [@media(max-height:520px)]:col-start-1"
       >
         {Array.from({ length: PIN_LENGTH }, (_, i) => (
           <span
@@ -167,7 +167,7 @@ export function PinPad({ title, subtitle, onComplete, error, busy = false, locke
         ))}
       </motion.div>
 
-      <div aria-live="assertive" className="min-h-14 text-center text-base font-bold">
+      <div aria-live="assertive" className="min-h-14 [@media(min-height:521px)_and_(max-height:860px)]:min-h-8 text-center text-base font-bold [@media(max-height:520px)]:col-start-1 [@media(max-height:520px)]:min-h-0 [@media(max-height:520px)]:self-start">
         {locked ? (
           <>
             {error && <p>{error}</p>}
@@ -178,7 +178,7 @@ export function PinPad({ title, subtitle, onComplete, error, busy = false, locke
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-4" role="group" aria-label="PIN keypad">
+      <div className="grid grid-cols-3 gap-4 [@media(max-height:520px)]:col-start-2 [@media(max-height:520px)]:row-span-4 [@media(max-height:520px)]:row-start-1" role="group" aria-label="PIN keypad">
         {DIGIT_ROWS.flat().map((d) => (
           <button key={d} type="button" className={KEY} disabled={disabled} onClick={() => press(d)}>
             {d}
@@ -197,7 +197,7 @@ export function PinPad({ title, subtitle, onComplete, error, busy = false, locke
         <button
           type="button"
           onClick={onCancel}
-          className="min-h-11 rounded-2xl px-5 text-base font-bold underline underline-offset-4 focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink"
+          className="min-h-[72px] rounded-2xl px-5 [@media(max-height:520px)]:col-start-1 [@media(max-height:520px)]:justify-self-center text-base font-bold underline underline-offset-4 focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
           {cancelLabel}
         </button>

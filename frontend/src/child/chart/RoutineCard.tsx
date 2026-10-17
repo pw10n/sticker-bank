@@ -120,7 +120,7 @@ export function RoutineCard({
       {awaiting && (
         <Link
           to={routine.sticker ? `/c/${childId}/pick/${routine.sticker.stickerId}` : `/c/${childId}`}
-          className="flex min-h-[88px] touch-manipulation items-center justify-center gap-3 rounded-full border-4 border-ink bg-sunshine px-6 text-[1.6rem] font-bold text-ink shadow-[0_6px_0_rgba(27,27,47,0.2)] focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-ink"
+          className="flex min-h-[88px] touch-manipulation items-center justify-center gap-3 rounded-full border-4 border-ink bg-sunshine px-3 text-[1.35rem] font-bold text-ink shadow-[0_6px_0_rgba(27,27,47,0.2)] focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-ink min-[400px]:px-6 min-[400px]:text-[1.6rem]"
         >
           <span aria-hidden="true">🎉</span>
           <span>Pick your sticker!</span>
@@ -129,7 +129,7 @@ export function RoutineCard({
 
       <ul className="grid grid-cols-2 gap-4">
         {routine.tasks.map((t) => (
-          <li key={t.taskId} data-task-id={t.taskId}>
+          <li key={t.taskId} data-task-id={t.taskId} className="flex">
             <TaskTile
               label={t.label}
               iconKey={t.iconKey}
@@ -199,7 +199,7 @@ function TaskTile({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   return (
-    <div ref={wrapRef} className="w-full">
+    <div ref={wrapRef} className="flex w-full">
       <BigTile
         icon={<Artwork artKey={iconKey} size={56} decorative />}
         label={label}
@@ -207,7 +207,7 @@ function TaskTile({
         disabled={disabled}
         busy={busy}
         color={color}
-        className={`w-full ${disabled ? 'grayscale' : ''}`}
+        className={`h-full w-full ${disabled ? 'grayscale' : ''}`}
         onPress={() => onPress(wrapRef.current)}
       />
     </div>
