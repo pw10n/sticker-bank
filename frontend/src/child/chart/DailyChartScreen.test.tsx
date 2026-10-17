@@ -257,9 +257,14 @@ describe('ChildLayout', () => {
     load()
     const router = setup()
     await screen.findByText('2 of 4 done')
+    const toggle = screen.getByRole('button', { name: /switch child/ })
+    expect(toggle).toHaveTextContent('Jane Doe')
+    expect(screen.queryByRole('button', { name: 'John Doe' })).not.toBeInTheDocument()
+    await userEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Jane Doe' })).toHaveAttribute('aria-current', 'true')
     await userEvent.click(screen.getByRole('button', { name: 'John Doe' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/c/2'))
-    expect(screen.getByRole('button', { name: 'John Doe' })).toHaveAttribute('aria-current', 'true')
+    expect(screen.getByRole('button', { name: /switch child/ })).toHaveTextContent('John Doe')
   })
 
   it('remembers the child and has the nav buttons', async () => {
