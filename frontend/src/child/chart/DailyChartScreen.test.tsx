@@ -97,6 +97,16 @@ describe('DailyChartScreen', () => {
     expect(screen.getByRole('region', { name: 'Bedtime' })).toBeInTheDocument()
   })
 
+  it('lays the routine cards out in a centred wrapping row (23rem to 28rem wide)', async () => {
+    load()
+    setup()
+    await screen.findByText('2 of 4 done')
+    const wrapper = screen.getByRole('region', { name: 'Morning Routine' }).parentElement as HTMLElement
+    expect(wrapper).toHaveClass('basis-[23rem]', 'max-w-[28rem]', 'grow')
+    expect(wrapper.parentElement).toHaveClass('flex', 'flex-wrap', 'justify-center')
+    expect(wrapper.parentElement).toContainElement(screen.getByRole('region', { name: 'Bedtime' }))
+  })
+
   it('marks a task done and the fake records it', async () => {
     load()
     setup()

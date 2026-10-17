@@ -18,7 +18,7 @@ export function WeekdayPicker({ value, onChange, label = 'Days' }: { value: Week
   return (
     <div role="group" aria-label={label} className="flex flex-col gap-2">
       <span className="text-base font-bold">{label}</span>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex max-w-[13rem] flex-wrap gap-1.5 min-[444px]:max-w-none sm:gap-2">
         {DAYS.map((d) => {
           const on = value.includes(d.key)
           return (
