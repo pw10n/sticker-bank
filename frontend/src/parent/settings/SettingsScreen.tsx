@@ -219,7 +219,7 @@ export default function SettingsScreen() {
         <p>App version {buildVersion()}</p>
         <p>Server version {bootstrap.data?.appVersion ?? '…'}</p>
         <p>
-          <a href="/licenses/" className="font-bold underline underline-offset-4">
+          <a href="/licenses/" className="inline-flex min-h-11 items-center font-bold underline underline-offset-4">
             Open-source licenses
           </a>
         </p>

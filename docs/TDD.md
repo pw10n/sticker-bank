@@ -4,9 +4,9 @@
 |---|---|
 | **Product** | Sticker Bank: a sticker / reward chart for young children |
 | **Document** | Technical Design Document |
-| **Version** | 0.6 |
+| **Version** | 0.7 |
 | **Status** | Draft |
-| **Date** | 2026-10-16 |
+| **Date** | 2026-10-17 |
 | **Implements** | [Functional Design Document v1.3](FDD.md) |
 
 > **Scope note:** This document covers **how** Sticker Bank is built: architecture, data storage, APIs, frontend, security, and deployment. **What** the app does is defined in the FDD. Requirement IDs (FR-x.y, BR-x, A-x, D-x) refer to it. Where the FDD is silent and a technical choice fills the gap, the choice is listed in §16.
@@ -21,6 +21,7 @@
 | 0.4 | 2026-10-15 | I'm Done! finish step from FDD v1.2 (FR-6.6 to FR-6.11). `READY_TO_FINISH` is a derived state. Completing the last task no longer earns a sticker: a new `finish` endpoint does (§7.4). A routine still Ready to finish at the end of the day is finished by lazy settlement with a `child.settled_through` watermark (§7.12). `V5` migration (`sticker.finish_mode`, `child.settled_through`, `live_sticker` refresh), `ROUTINE_NOT_READY`, I'm Done! button and parent "Finished automatically" chip, TD-18, TD-19, I-21 to I-25. A routine edit that leaves every task done no longer earns (I-3). |
 | 0.5 | 2026-10-15 | Re-earning after a revoke offers the same Sticker Pick choices (FDD v1.3: FR-12.5, FR-12.8, BR-6). `sticker_pick_choice` rows are kept after a claim and after a revoke, and the earn step copies the latest revoked sticker's rows for the same routine and day (§7.5, §7.11). No schema change. A design that was ever offered can't be deleted (I-16). |
 | 0.6 | 2026-10-16 | A stale frontend is told to refresh. Every `/api` response carries `X-Min-Frontend-Version` (the configured `STICKER_BANK_MIN_FRONTEND_VERSION`, or the server's own version), and a PWA built older than that applies the new service worker at the first safe moment instead of waiting for a foreground event, with a guarded hard-reload fallback (§8.1, §9.5, TD-20, I-26). `APP_VERSION` is now stamped automatically with the build time, once per build, so every build differs (§12.1). The child and parent pages end with a small `App … · Server …` line (§9.5). No schema or endpoint change. |
+| 0.7 | 2026-10-17 | Responsive layout rules from a multi-viewport audit (iPhone 11 Pro, Pixel 10 Pro, iPad Air, desktop). §9.3 now spells out the breakpoints: the two-row child header on phones, the centered auto-fit chart grid, the short-viewport layouts (landscape phones) for the PIN screens and the child picker, the Parent Mode navigation and History grid breakpoints, the pinned Sheet footer, and where safe-area insets are applied. §9.9 adds that theme colors are never used as text color. No schema, endpoint or FDD change. |
 
 ---
 
@@ -1062,7 +1063,11 @@ The `/parent/*` routes sit behind a guard that calls `GET /api/parent/session` a
 - **The last task gets only the small pop** (FR-6.4). The big celebration waits for the finish response, because the server returns the choices (typically under 100 ms on a LAN).
 - **Focus** (FR-5.6): finished routines (`AWAITING_PICK`, `EARNED`) collapse, and the first unfinished routine is highlighted and scrolled into view. A routine that is Ready to finish counts as unfinished, so it stays open with its button visible. No time-of-day settings are needed.
 - **No accidental gestures:** `touch-action: manipulation` (no double-tap zoom), `overscroll-behavior: none` (no pull-to-refresh), no text selection or long-press menus in Child Mode, and nothing that depends on hover.
-- **Layout:** on a phone, routine cards stack. On a tablet in landscape, routines sit side by side. Safe-area insets are respected.
+- **Layout:** on a phone, routine cards stack. On a tablet in landscape, routines sit side by side. Safe-area insets are respected. The breakpoints that make this work are:
+  - **Header** (child pages): below 640 px it has two rows. The first holds the child avatars on the left and the Parent Mode button on the right. The second is an equal-width, three-column row of page links, each with the icon above a one-line label. From 640 px everything sits on one row (links centered, icon above label), and from 1024 px the links go back to icon beside label. Targets are at least 72 px and at least 16 px apart at every width, and the current child is marked with a border and ring, never by scaling. On phones the Parent Mode button is drawn above the links but stays last in the DOM, so tab order is avatars, links, Parent Mode.
+  - **Chart:** the routine cards use an auto-fit grid of 23 to 28 rem columns, centered. That gives one column on a phone, two on an iPad Air in either orientation, and three only when three cards fit (about 1200 px and up). A lone routine is never pushed to one side.
+  - **Short screens** (landscape phones): at a viewport height of 520 px or less, the PIN pad, the Parent Mode gate and the Welcome screen put the title, dots and Back button on the left and the keypad on the right, so the keypad (72 px keys, 16 px apart) fits a 375 px-tall screen without scrolling. At 500 px or less the child picker tightens its spacing so both children fit without scrolling. Between 521 and 860 px tall (an iPhone 11 Pro in portrait, an iPad Air in landscape) the Welcome screen and the PIN card use tighter spacing and a smaller heading, so the whole PIN screen fits without scrolling on an 812 px-tall phone.
+  - **Safe areas:** the `body` padding is the only source of insets for content in the normal flow, so child layouts add none of their own. Fixed elements ignore it and add their own `env(safe-area-inset-*)`: the Parent Mode bottom bar, the "Waiting for Wi-Fi" banner (top), the update toast, and the Sheet footer.
 - **Get a Prize** (FR-11.1–11.6): selected stickers lift and show a check, with a large counter. The screen switches to "Waiting for grown-up" (with a cancel button) while a request is pending. Friendly empty states, as specified in the FDD.
 - **Parent Mode button:** small, in a top corner, with the pending-requests badge (FR-11.11). Suggestion: press and hold for 1 s to open the PIN pad, so toddler taps don't keep triggering the shared lockout (I-12).
 - **Kiosk use:** the runbook recommends iOS Guided Access or Android screen pinning on the child's tablet.
@@ -1076,6 +1081,13 @@ The `/parent/*` routes sit behind a guard that calls `GET /api/parent/session` a
 - The confirm request is not optimistic: the sheet waits for the server, then the chart, Sticker Book, and pending-request queries are invalidated.
 - A routine that is Ready to finish, today or on a past day, shows "All tasks done" and an **I'm Done!** button so the parent can finish it (FR-6.5). Its done tasks uncheck with no confirm sheet, because there is no sticker to remove (BR-19).
 - A sticker with `autoFinished` shows a **Finished automatically** chip next to its status chip, and the History calendar marks the day the same way, so the parent can check that the tasks were really done (FR-6.11). Child Mode never shows this flag (I-25).
+
+**Parent Mode layout** (touch targets here are at least 44 px):
+
+- **Navigation:** below 768 px a fixed bottom bar with five equal-height items (labels may wrap to two lines, and the Prizes badge sits over the icon, so the bar never changes height); from 768 px a left sidebar. The page keeps room for the bar plus the bottom safe-area inset, and the update toast sits above the bar on phones.
+- **History week** (FR-9.1): one column below 768 px, two from 768 px and three from 1024 px. There is no seven-column layout: the content column stops at 896 px, which would leave each day about 110 px wide, too narrow for the status chips. Chips wrap inside their card instead of spilling past its border.
+- **Sheets:** the height is capped in `dvh`, not `vh`, so mobile browser chrome doesn't hide the bottom. The title and the footer stay pinned and only the body scrolls, so Save, Close and **Remove sticker** are always on screen, even on a 375 px-tall landscape phone.
+- **Controls:** a native `<select>` is drawn with `appearance: none`, an explicit 44 px height and a background chevron, because WebKit ignores `min-height` on a native select. The weekday pills are 44 px circles that wrap onto a second row on narrow phones.
 
 ### 9.4 Celebrations and Sound (FR-6.4, FR-7.2, FR-7.8, FR-7.9)
 
@@ -1114,7 +1126,7 @@ Current iPadOS/iOS Safari and Android Chrome, on tablets and phones. Vite's defa
 
 ### 9.9 Accessibility
 
-Task tiles are real `<button>` elements with `aria-pressed`. Progress is announced through `aria-live`, including "All tasks done. Tap I'm Done!" when that button appears. Focus is trapped in dialogs and the PIN pad. Text contrast is at least 4.5:1 on every child theme color, because the palette is a fixed set checked at design time. Everything in Parent Mode works with a keyboard.
+Task tiles are real `<button>` elements with `aria-pressed`. Progress is announced through `aria-live`, including "All tasks done. Tap I'm Done!" when that button appears. Focus is trapped in dialogs and the PIN pad. Text contrast is at least 4.5:1 on every child theme color, because the palette is a fixed set checked at design time. A theme color is never used as the color of text (the palette measures only about 1.6 to 2.8:1 on white): counters and stat numbers are ink, and the theme shows up as a ring or badge behind them. Everything in Parent Mode works with a keyboard.
 
 ## 10. Backend Details
 

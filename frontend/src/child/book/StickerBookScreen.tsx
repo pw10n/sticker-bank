@@ -39,10 +39,14 @@ function Tile({ icon, label, value, testId }: { icon: string; label: string; val
       data-testid={testId}
       className="flex min-w-[120px] flex-1 flex-col items-center gap-1 rounded-[2rem] border-4 border-ink/25 bg-white p-3 text-center"
     >
-      <span aria-hidden="true" className="text-4xl">
+      <span
+        aria-hidden="true"
+        className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-ink/25 text-3xl"
+        style={{ backgroundColor: 'var(--child-color)' }}
+      >
         {icon}
       </span>
-      <span className="text-4xl font-bold" style={{ color: 'var(--child-color)' }}>
+      <span className="text-4xl font-bold text-ink">
         {value}
       </span>
       <span className="text-lg font-bold">{label}</span>
@@ -86,9 +90,9 @@ function StickerTile({ sticker, onOpen }: { sticker: BookSticker; onOpen(): void
     >
       <span className={`flex flex-col items-center gap-1 ${used ? 'opacity-50 grayscale' : ''}`}>
         <Artwork artKey={sticker.design.artworkKey} size={96} alt="" decorative />
-        <span className="text-base font-bold">{sticker.design.name}</span>
+        <span className="text-lg font-bold">{sticker.design.name}</span>
         {sticker.routineName && (
-          <span className="flex items-center gap-1 text-sm">
+          <span className="flex items-center gap-1 text-base">
             {sticker.routineIconKey && <Artwork artKey={sticker.routineIconKey} size={20} decorative />}
             {sticker.routineName}
           </span>
@@ -143,7 +147,7 @@ export default function StickerBookScreen() {
       aria-pressed={filter === value}
       onClick={() => setFilter(value)}
       style={filter === value ? { backgroundColor: 'var(--child-color)' } : undefined}
-      className={`min-h-[56px] rounded-full border-4 px-6 text-xl font-bold text-ink touch-manipulation ${
+      className={`min-h-[72px] rounded-full border-4 px-6 text-xl font-bold text-ink touch-manipulation ${
         filter === value ? 'border-ink' : 'border-ink/25 bg-white'
       }`}
     >
@@ -156,7 +160,7 @@ export default function StickerBookScreen() {
       <div className="mx-auto flex max-w-3xl flex-col gap-6">
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-4xl font-bold">My Sticker Book</h1>
-          <Link to={`/c/${childId}`} className="min-h-[56px] rounded-full border-4 border-ink/25 bg-white px-5 py-3 text-lg font-bold">
+          <Link to={`/c/${childId}`} className="flex min-h-[72px] items-center rounded-full border-4 border-ink/25 bg-white px-5 py-3 text-lg font-bold">
             Back to my chart
           </Link>
         </div>
@@ -181,7 +185,7 @@ export default function StickerBookScreen() {
           </>
         )}
 
-        <div className="flex flex-wrap gap-3" role="group" aria-label="Filter stickers">
+        <div className="flex flex-wrap gap-4" role="group" aria-label="Filter stickers">
           {filterBtn('all', 'All')}
           {filterBtn('available', 'Ready to spend')}
         </div>

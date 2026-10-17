@@ -113,7 +113,7 @@ export function UpdateToast() {
   return (
     <div
       role="status"
-      className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-fit items-center gap-3 rounded-full bg-ink px-5 py-3 text-paper shadow-lg"
+      className="fixed inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-50 md:bottom-4 mx-auto flex w-fit items-center gap-3 rounded-full bg-ink px-5 py-3 text-paper shadow-lg"
     >
       <span>{updateRequired ? 'This app is out of date and must reload' : 'A new version is ready'}</span>
       <button type="button" onClick={applyUpdate} className="rounded-full bg-paper px-4 py-1 font-semibold text-ink">

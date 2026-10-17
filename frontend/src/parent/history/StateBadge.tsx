@@ -13,7 +13,7 @@ export function StateBadge({
   const info = STATE_INFO[state]
   const showCount = state === 'MISSED' || state === 'IN_PROGRESS' || state === 'NOT_STARTED'
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border-2 px-2 py-0.5 text-sm font-bold ${info.cls}`}>
+    <span className={`inline-flex max-w-full min-w-0 flex-wrap items-center gap-x-1 break-words rounded-2xl border-2 px-2 py-0.5 text-sm font-bold ${info.cls}`}>
       <span aria-hidden="true">{info.icon}</span>
       {info.text}
       {showCount && <span className="font-normal">{` ${doneCount}/${taskCount}`}</span>}

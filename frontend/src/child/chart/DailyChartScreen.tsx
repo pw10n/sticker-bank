@@ -121,7 +121,7 @@ export default function DailyChartScreen() {
       {visible.length === 0 ? (
         <EmptyState icon="🎈" title="No routines today — time to play! 🎈" />
       ) : (
-        <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,23rem),28rem))] items-start justify-center gap-6">
           {visible.map((r) => (
             <RoutineCard
               key={r.routineId}

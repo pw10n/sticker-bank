@@ -82,12 +82,12 @@ export default function HistoryScreen() {
 
       {history.data && (
         <>
-          <ol className="grid grid-cols-1 gap-3 md:grid-cols-7">
+          <ol className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
             {weekDates(start).map((date) => {
               const future = date > today
               const day = byDate.get(date)
               return (
-                <li key={date} data-testid={`day-${date}`} className={future ? 'opacity-50' : ''}>
+                <li key={date} data-testid={`day-${date}`} className={`min-w-0 ${future ? 'opacity-50' : ''}`}>
                   <Card className="h-full">
                     {future ? (
                       <p className="font-bold" aria-label={`${dayLabel(date)}, upcoming`}>
@@ -106,12 +106,12 @@ export default function HistoryScreen() {
                     {!future && (
                       <ul className="flex flex-col gap-2">
                         {(day?.routines ?? []).map((r) => (
-                          <li key={r.routineId} className="flex flex-col gap-1">
-                            <span className="text-sm font-semibold">{r.name}</span>
+                          <li key={r.routineId} className="flex min-w-0 flex-col items-start gap-1">
+                            <span className="max-w-full break-words text-sm font-semibold">{r.name}</span>
                             <StateBadge state={r.state} doneCount={r.doneCount} taskCount={r.taskCount} />
                             {/* FR-6.11: the day ended before I'm Done! was tapped, so check the tasks were really done. */}
                             {r.autoFinished && (
-                              <span data-testid="auto-finished-mark" className="text-xs font-semibold">
+                              <span data-testid="auto-finished-mark" className="max-w-full break-words text-xs font-semibold">
                                 <span aria-hidden="true">⏰ </span>Finished automatically
                               </span>
                             )}

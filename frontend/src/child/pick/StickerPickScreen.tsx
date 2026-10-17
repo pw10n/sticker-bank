@@ -107,7 +107,7 @@ export default function StickerPickScreen() {
     <button
       type="button"
       onClick={() => void navigate(chartPath)}
-      className="absolute right-4 top-4 min-h-[56px] min-w-[72px] rounded-full border-4 border-ink/25 bg-white px-5 text-lg font-bold text-ink touch-manipulation"
+      className="absolute right-4 top-4 min-h-[72px] min-w-[72px] rounded-full border-4 border-ink/25 bg-white px-5 text-lg font-bold text-ink touch-manipulation"
     >
       Not now
     </button>
@@ -116,7 +116,7 @@ export default function StickerPickScreen() {
   const shell = (children: React.ReactNode, withClose: boolean) => (
     <main
       data-testid="screen-sticker-pick-screen"
-      className="relative flex min-h-dvh flex-col items-center gap-6 bg-paper px-4 pb-10 pt-20 text-ink"
+      className="relative flex min-h-dvh flex-col items-center gap-6 bg-paper px-4 pb-10 pt-28 text-ink"
     >
       {withClose && closeButton}
       {children}

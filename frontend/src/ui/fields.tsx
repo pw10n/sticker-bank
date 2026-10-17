@@ -10,6 +10,11 @@ import {
 const CONTROL =
   'w-full min-h-11 rounded-2xl border-2 border-ink/30 bg-white px-4 py-2 text-lg text-ink focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink aria-[invalid=true]:border-strawberry'
 
+// WebKit ignores min-height on a native <select>, so drop the native look, set an explicit
+// 44 px height and draw the chevron as a background image (the element stays a real <select>).
+const SELECT_EXTRA =
+  "h-11 appearance-none bg-[url(data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2716%27%20height=%2710%27%20viewBox=%270%200%2016%2010%27%3E%3Cpath%20d=%27M2%202l6%206%206-6%27%20fill=%27none%27%20stroke=%27%231b1b2f%27%20stroke-width=%272.5%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27/%3E%3C/svg%3E)] bg-[length:16px_10px] bg-[position:right_1rem_center] bg-no-repeat pr-11"
+
 export function FieldError({ message, id }: { message?: string; id?: string }) {
   if (!message) return null
   return (
@@ -105,7 +110,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         id={fid}
         aria-invalid={error ? true : undefined}
         aria-describedby={[hint ? `${fid}-hint` : '', error ? `${fid}-error` : ''].filter(Boolean).join(' ') || undefined}
-        className={`${CONTROL} ${className}`}
+        className={`${CONTROL} ${SELECT_EXTRA} ${className}`}
         {...rest}
       >
         {children}

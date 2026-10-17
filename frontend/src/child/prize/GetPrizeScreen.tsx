@@ -50,7 +50,7 @@ function WaitingView({ childId }: { childId: number }) {
       <p className="text-xl" aria-live="polite">
         {request.stickerCount} {request.stickerCount === 1 ? 'sticker' : 'stickers'}
       </p>
-      <ul className="flex flex-wrap justify-center gap-3" aria-label="Your stickers">
+      <ul className="flex flex-wrap justify-center gap-4" aria-label="Your stickers">
         {request.stickers
           .filter((s) => !s.revoked)
           .map((s) => (
@@ -62,7 +62,7 @@ function WaitingView({ childId }: { childId: number }) {
       {cancel.isError && <p role="alert" className="text-lg">Oops! Please try again.</p>}
       <Button
         variant="secondary"
-        size="lg"
+        size="xl"
         disabled={!canWrite}
         onClick={() => {
           play('tap')
@@ -174,10 +174,15 @@ function SelectionView({ childId }: { childId: number }) {
       <h1 id="prize-title" className="text-center text-3xl font-extrabold">Get a prize!</h1>
       <p className="text-center text-lg">Tap the stickers you want to trade.</p>
       <div className="flex flex-col items-center gap-1" aria-live="polite" aria-atomic="true" data-testid="prize-counter">
-        <span className="text-7xl font-extrabold" style={{ color: 'var(--child-color)' }}>{count}</span>
+        <span
+          className="flex h-28 min-w-28 items-center justify-center rounded-full border-8 bg-white px-4 text-7xl font-extrabold text-ink"
+          style={{ borderColor: 'var(--child-color)' }}
+        >
+          {count}
+        </span>
         <span className="text-xl font-bold">{count === 1 ? 'sticker picked' : 'stickers picked'}</span>
       </div>
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-3">
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(136px,1fr))] gap-6">
         {items.map((s) => {
           const on = picked.includes(s.stickerId)
           return (
@@ -187,7 +192,7 @@ function SelectionView({ childId }: { childId: number }) {
                 aria-pressed={on}
                 disabled={!canWrite}
                 onClick={() => toggle(s.stickerId)}
-                animate={reduced ? undefined : { y: on ? -8 : 0, scale: on ? 1.06 : 1 }}
+                animate={reduced ? undefined : { y: on ? -4 : 0, scale: on ? 1.04 : 1 }}
                 className={`relative flex min-h-24 min-w-24 w-full flex-col items-center gap-1 rounded-2xl border-4 bg-white p-2 disabled:opacity-60 ${FOCUS} ${
                   on ? 'shadow-xl' : 'border-transparent shadow'
                 }`}
@@ -203,7 +208,7 @@ function SelectionView({ childId }: { childId: number }) {
                   </span>
                 )}
                 <Artwork artKey={s.design.artworkKey} size={72} decorative />
-                <span className="text-sm font-bold">{s.design.name}</span>
+                <span className="text-lg font-bold leading-tight">{s.design.name}</span>
               </motion.button>
             </li>
           )
@@ -214,11 +219,11 @@ function SelectionView({ childId }: { childId: number }) {
           {message}
         </p>
       )}
-      <div className="flex flex-col items-center gap-3">
+      <div className="flex flex-col items-center gap-4">
         <Button size="xl" disabled={count === 0 || !canWrite} loading={create.isPending} onClick={submit}>
           Get my prize!
         </Button>
-        <Button variant="ghost" size="md" disabled={count === 0} onClick={() => setSelected([])}>
+        <Button variant="ghost" size="xl" disabled={count === 0} onClick={() => setSelected([])}>
           Clear
         </Button>
       </div>

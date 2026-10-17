@@ -36,9 +36,9 @@ export default function ChildLayout() {
 
   return (
     <ThemeScope color={child.themeColor} className="min-h-dvh bg-paper text-ink">
-      <div className="flex min-h-dvh flex-col pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)]">
-        <header className="flex flex-wrap items-center gap-3 border-b-4 border-ink/10 bg-[var(--child-color-soft)] px-4 py-3">
-          <nav aria-label="Who is playing" className="flex items-center gap-3">
+      <div className="flex min-h-dvh flex-col">
+        <header className="flex flex-wrap items-center gap-4 border-b-4 border-ink/10 bg-[var(--child-color-soft)] px-4 py-2">
+          <nav aria-label="Who is playing" className="order-1 flex items-center gap-4">
             {data.children.map((c) => {
               const current = c.id === child.id
               return (
@@ -52,7 +52,7 @@ export default function ChildLayout() {
                   }}
                   style={{ backgroundColor: c.themeColor }}
                   className={`flex h-[72px] w-[72px] touch-manipulation items-center justify-center rounded-full border-4 ${
-                    current ? 'scale-110 border-ink ring-4 ring-white' : 'border-ink/30'
+                    current ? 'border-ink ring-4 ring-white' : 'border-ink/30'
                   } focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink`}
                 >
                   <Artwork artKey={c.avatarKey} size={48} decorative />
@@ -60,26 +60,26 @@ export default function ChildLayout() {
               )
             })}
           </nav>
-          <nav aria-label="Pages" className="flex flex-1 flex-wrap items-center justify-center gap-3">
+          <nav aria-label="Pages" className="order-3 grid w-full grid-cols-3 gap-4 sm:order-2 sm:flex sm:w-auto sm:flex-1 sm:justify-center">
             {nav.map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}
                 end={n.end}
                 className={({ isActive }) =>
-                  `flex min-h-[72px] touch-manipulation items-center gap-2 rounded-full border-4 border-ink px-5 text-[1.35rem] font-bold text-ink focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink ${
+                  `flex min-h-[72px] touch-manipulation flex-col items-center justify-center whitespace-nowrap rounded-full border-4 border-ink px-1 text-[0.9375rem] font-bold sm:px-5 sm:text-[1.35rem] lg:flex-row lg:gap-2 text-ink focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink ${
                     isActive ? 'bg-[var(--child-color)]' : 'bg-white'
                   }`
                 }
               >
-                <span aria-hidden="true" className="text-3xl">
+                <span aria-hidden="true" className="text-3xl leading-none">
                   {n.icon}
                 </span>
                 <span>{n.label}</span>
               </NavLink>
             ))}
           </nav>
-          <div className="ml-auto">
+          <div className="order-2 ml-auto sm:order-3">
             <HoldButton
               label="Parent Mode"
               badge={data.pendingPrizeRequestCount}
@@ -90,7 +90,7 @@ export default function ChildLayout() {
             </HoldButton>
           </div>
         </header>
-        <div className="flex-1 pb-[env(safe-area-inset-bottom)]">
+        <div className="flex-1">
           <Outlet />
         </div>
         <VersionFooter className="py-1" />

@@ -23,7 +23,7 @@ export function ArtworkPicker({ use, value, onChange, label }: ArtworkPickerProp
   return (
     <div role="group" aria-label={label} className="flex flex-col gap-3">
       <label htmlFor={searchId} className="text-sm font-semibold">
-        Search {label}
+        Search pictures
       </label>
       <input
         id={searchId}

@@ -70,13 +70,17 @@ export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="relative flex max-h-[90vh] w-full max-w-lg flex-col gap-4 overflow-y-auto rounded-t-[2rem] bg-paper p-6 text-ink shadow-2xl outline-none sm:rounded-[2rem]"
+        className="relative flex max-h-[calc(100dvh-0.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] bg-paper text-ink shadow-2xl outline-none sm:max-h-[calc(100dvh-2rem)] sm:rounded-[2rem]"
       >
-        <h2 id={titleId} className="text-2xl font-bold">
+        <h2 id={titleId} className="shrink-0 px-6 pt-5 pb-2 text-2xl font-bold sm:pt-6">
           {title}
         </h2>
-        <div>{children}</div>
-        {footer && <div className="flex flex-wrap justify-end gap-3">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-2">{children}</div>
+        {footer && (
+          <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-black/10 bg-paper px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body,

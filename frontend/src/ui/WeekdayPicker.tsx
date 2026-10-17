@@ -18,7 +18,7 @@ export function WeekdayPicker({ value, onChange, label = 'Days' }: { value: Week
   return (
     <div role="group" aria-label={label} className="flex flex-col gap-2">
       <span className="text-base font-bold">{label}</span>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {DAYS.map((d) => {
           const on = value.includes(d.key)
           return (
@@ -28,7 +28,7 @@ export function WeekdayPicker({ value, onChange, label = 'Days' }: { value: Week
               aria-label={d.name}
               aria-pressed={on}
               onClick={() => toggle(d.key)}
-              className={`h-11 w-11 rounded-full border-2 text-lg font-bold touch-manipulation focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink ${
+              className={`h-11 w-11 shrink-0 rounded-full border-2 text-lg font-bold touch-manipulation focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink ${
                 on ? 'border-ink bg-sunshine text-ink' : 'border-ink/30 bg-white text-ink'
               }`}
             >

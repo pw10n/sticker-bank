@@ -55,7 +55,7 @@ export default function ParentGuard() {
   const showCreate = !forceUnlock && (bootstrap.data?.setupRequired === true || needsCreate)
 
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-5 bg-paper p-6 text-ink">
+    <main className="flex min-h-dvh flex-col items-center justify-center gap-5 bg-paper p-6 text-ink [@media(max-height:520px)]:flex-row [@media(max-height:520px)]:gap-4 [@media(max-height:520px)]:p-2">
       {showCreate ? (
         <CreatePinFlow
           onDone={() => {}}
@@ -99,7 +99,7 @@ export default function ParentGuard() {
           }}
         />
       )}
-      <p className="max-w-sm text-center text-sm">
+      <p className="max-w-sm text-center text-sm [@media(max-height:520px)]:max-w-[11rem] [@media(max-height:520px)]:text-left [@media(max-height:520px)]:text-xs">
         Forgot your PIN? Ask the person who set up Sticker Bank (the Admin) to reset it.
       </p>
     </main>
