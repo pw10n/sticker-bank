@@ -1373,6 +1373,178 @@ export const ARTWORK_LIST: readonly ArtworkEntry[] = [
     ],
     "category": null,
     "file": "/artwork/school.webp"
+  },
+  {
+    "key": "fork-and-knife-with-plate",
+    "name": "Fork and Knife with Plate",
+    "emoji": "🍽️",
+    "tags": [
+      "dishes",
+      "meal"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "file": "/artwork/fork-and-knife-with-plate.webp"
+  },
+  {
+    "key": "wastebasket",
+    "name": "Wastebasket",
+    "emoji": "🗑️",
+    "tags": [
+      "trash"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "file": "/artwork/wastebasket.webp"
+  },
+  {
+    "key": "dog",
+    "name": "Dog",
+    "emoji": "🐕",
+    "tags": [
+      "pet"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "file": "/artwork/dog.webp"
+  },
+  {
+    "key": "cat",
+    "name": "Cat",
+    "emoji": "🐈",
+    "tags": [
+      "pet"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "file": "/artwork/cat.webp"
+  },
+  {
+    "key": "fish",
+    "name": "Fish",
+    "emoji": "🐟",
+    "tags": [
+      "pet"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "file": "/artwork/fish.webp"
+  },
+  {
+    "key": "seedling",
+    "name": "Seedling",
+    "emoji": "🌱",
+    "tags": [
+      "garden"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "file": "/artwork/seedling.webp"
+  },
+  {
+    "key": "fallen-leaf",
+    "name": "Fallen Leaf",
+    "emoji": "🍂",
+    "tags": [
+      "rake",
+      "garden"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "file": "/artwork/fallen-leaf.webp"
+  },
+  {
+    "key": "bucket",
+    "name": "Bucket",
+    "emoji": "🪣",
+    "tags": [
+      "mop",
+      "wash"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "file": "/artwork/bucket.webp"
+  },
+  {
+    "key": "shopping-cart",
+    "name": "Shopping Cart",
+    "emoji": "🛒",
+    "tags": [
+      "shop"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "file": "/artwork/shopping-cart.webp"
+  },
+  {
+    "key": "package",
+    "name": "Package",
+    "emoji": "📦",
+    "tags": [
+      "pack"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "file": "/artwork/package.webp"
+  },
+  {
+    "key": "books",
+    "name": "Books",
+    "emoji": "📚",
+    "tags": [
+      "tidy",
+      "read"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "file": "/artwork/books.webp"
+  },
+  {
+    "key": "mailbox",
+    "name": "Mailbox",
+    "emoji": "📬",
+    "tags": [
+      "mail"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "file": "/artwork/mailbox.webp"
   }
 ]
 

@@ -1,5 +1,7 @@
 package com.stickerbank.chart
 
+import com.stickerbank.chore.ChoreReader
+import com.stickerbank.chore.HistoryChoreDto
 import com.stickerbank.common.DomainException
 import com.stickerbank.common.ErrorCode
 import com.stickerbank.common.FamilyClock
@@ -15,6 +17,7 @@ class HistoryService(
     private val clock: FamilyClock,
     private val revocations: RevocationService,
     private val settlement: DaySettlement,
+    private val choreReader: ChoreReader,
 ) {
     fun history(childId: Long, fromRaw: String?, toRaw: String?): HistoryDto {
         val today = clock.today()
@@ -25,6 +28,8 @@ class HistoryService(
         val completions = queries.completions(childId, from, to)
         val stickers = queries.stickers(childId, from, to)
         val revoked = revocations.revocationsFor(childId, from, to)
+        // History is a parent page, so the chore stickers carry `autoFinished` (TDD 7.9, FR-13.26).
+        val chores = choreReader.choresByDay(childId, from, to, today, parent = true)
         val days = plan.map { (date, routines) ->
             val completed = completions[date].orEmpty()
             HistoryDayDto(
@@ -41,6 +46,18 @@ class HistoryService(
                         dto.taskCount,
                         sticker?.stickerId,
                         sticker?.finishMode == FinishMode.AUTO,
+                    )
+                },
+                chores[date].orEmpty().map {
+                    HistoryChoreDto(
+                        it.choreId,
+                        it.name,
+                        it.iconKey,
+                        it.state,
+                        it.doneCount,
+                        it.taskCount,
+                        it.sticker?.stickerId,
+                        it.sticker?.autoFinished == true,
                     )
                 },
                 revoked[date].orEmpty(),

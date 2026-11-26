@@ -3,6 +3,7 @@ package com.stickerbank.chart
 import com.stickerbank.common.Actor
 import com.stickerbank.common.ChildLock
 import com.stickerbank.common.DomainException
+import com.stickerbank.common.EarnSource
 import com.stickerbank.common.ErrorCode
 import com.stickerbank.common.FamilyClock
 import com.stickerbank.common.FinishMode
@@ -98,7 +99,14 @@ class CompletionService(
             }
             val completed = queries.completions(childId, date, date)[date].orEmpty()
             if (!planned.tasks.all { it.taskId in completed }) throw DomainException(ErrorCode.ROUTINE_NOT_READY)
-            val pick: StickerPickDto = earner.earn(childId, routineId, date, planned.name, planned.iconKey, FinishMode.TAPPED)
+            val pick: StickerPickDto = earner.earn(
+                childId,
+                EarnSource.Routine(routineId),
+                date,
+                planned.name,
+                planned.iconKey,
+                FinishMode.TAPPED,
+            )
             log.info("routine finished childId={} routineId={} date={} stickerId={}", childId, routineId, date, pick.stickerId)
             TaskToggleResultDto(view(childId, planned, date, today, actor), pick, null)
         }

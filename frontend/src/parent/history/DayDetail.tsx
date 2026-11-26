@@ -14,9 +14,10 @@ import {
 import type { ChartRoutine, ChartSticker, StickerPick, StickerStatus } from '../../api/types'
 import { Artwork } from '../../artwork'
 import { useMode } from '../../app'
-import { Button, Sheet, Spinner, TextArea } from '../../ui'
+import { Button, Sheet, Spinner } from '../../ui'
 import { dayLabel } from './dates'
 import { StateBadge } from './StateBadge'
+import { RevokeSheet, USED_EXPLANATION } from '../shared/RevokeSheet'
 
 type Props = {
   childId: number
@@ -34,7 +35,6 @@ const STATUS_LABEL: Record<StickerStatus, string> = {
   REVOKED: 'Removed',
 }
 
-const USED_EXPLANATION = "This sticker was already spent on a prize, so it can't be taken back."
 
 function StickerReview({ sticker }: { sticker: ChartSticker }) {
   return (
@@ -342,9 +342,12 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
       )}
       {revokeTarget && (
         <RevokeSheet
+          ownerKind="routine"
+          ownerName={revokeTarget.routineName}
+          taskLabel={revokeTarget.taskLabel}
+          sticker={revokeTarget.sticker}
           childName={childName}
           date={date}
-          target={revokeTarget}
           lastInRequest={
             revokeTarget.sticker.prizeRequestId != null &&
             pendingRequest.data?.id === revokeTarget.sticker.prizeRequestId &&
@@ -358,95 +361,6 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
           onClose={closeRevoke}
         />
       )}
-    </Sheet>
-  )
-}
-
-function RevokeSheet({
-  childName,
-  date,
-  target,
-  lastInRequest,
-  note,
-  onNote,
-  busy,
-  errorKind,
-  onConfirm,
-  onClose,
-}: {
-  childName: string
-  date: string
-  target: RevokeTarget
-  lastInRequest: boolean
-  note: string
-  onNote(v: string): void
-  busy: boolean
-  errorKind: 'used' | 'other' | null
-  onConfirm(): void
-  onClose(): void
-}) {
-  const { sticker, taskLabel, routineName } = target
-  const blocked = sticker.revocable === false || errorKind === 'used'
-  return (
-    <Sheet
-      open
-      onClose={busy ? () => {} : onClose}
-      title="Remove this sticker?"
-      footer={
-        <div className="flex flex-wrap gap-2">
-          {!blocked && (
-            <Button variant="danger" loading={busy} onClick={onConfirm}>
-              Remove sticker
-            </Button>
-          )}
-          <Button variant="secondary" disabled={busy} onClick={onClose}>
-            {blocked ? 'OK' : 'Cancel'}
-          </Button>
-        </div>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          {sticker.design ? (
-            <>
-              <Artwork artKey={sticker.design.artworkKey} size={64} alt="" decorative />
-              <span className="font-bold">{sticker.design.name}</span>
-            </>
-          ) : (
-            <span className="font-bold">Not picked yet</span>
-          )}
-        </div>
-        <p>
-          Unchecking &apos;{taskLabel}&apos; in {routineName} on {dayLabel(date, true)} removes this sticker from{' '}
-          {childName}&apos;s Sticker Book. The routine won&apos;t be finished until it&apos;s done again.
-        </p>
-        {blocked ? (
-          <p role="alert" className="font-bold">
-            {USED_EXPLANATION}
-          </p>
-        ) : (
-          <>
-            {sticker.status === 'PENDING' && (
-              <p className="font-bold">
-                This sticker is in a prize request. It will be taken out
-                {lastInRequest ? ', and the request will be cancelled' : ''}.
-              </p>
-            )}
-            <TextArea
-              label="Note (optional)"
-              maxLength={200}
-              value={note}
-              onChange={(e) => onNote(e.target.value)}
-              disabled={busy}
-            />
-            {errorKind === 'other' && (
-              <p role="alert" className="font-bold">
-                Could not remove the sticker. Please try again.
-              </p>
-            )}
-          </>
-        )}
-      </div>
     </Sheet>
   )
 }

@@ -24,6 +24,10 @@ enum class ErrorCode(val status: HttpStatus, val title: String) {
     STICKER_USED(HttpStatus.CONFLICT, "This sticker was already spent on a prize"),
     REVOKE_CONFIRMATION_REQUIRED(HttpStatus.CONFLICT, "Confirm to remove this sticker"),
     STICKER_REVOKED(HttpStatus.CONFLICT, "This sticker was taken back"),
+    CHORE_NOT_READY(HttpStatus.CONFLICT, "Some tasks in this chore are not done yet"),
+    CHORE_MISSED(HttpStatus.CONFLICT, "The time for this chore is over"),
+    CHORE_LOCKED(HttpStatus.CONFLICT, "This chore is already finished"),
+    CHORE_LIMIT_REACHED(HttpStatus.CONFLICT, "There are already 5 chores to do"),
     NOT_FOUND(HttpStatus.NOT_FOUND, "Not found"),
     CSRF_HEADER_MISSING(HttpStatus.FORBIDDEN, "Missing required request header"),
 }

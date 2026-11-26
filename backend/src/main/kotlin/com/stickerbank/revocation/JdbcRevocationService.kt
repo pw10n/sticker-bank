@@ -12,17 +12,21 @@ import com.stickerbank.routine.PlannedRoutine
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Service
+import java.sql.ResultSet
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 
-/** Sticker revocation (TDD 7.11). Callers hold the child lock inside one transaction. */
+/**
+ * Sticker revocation (TDD 7.11). Callers hold the child lock inside one transaction. [revokeStickerLocked] is the part
+ * routines and chores share; [revokeLocked] is the routine path around it.
+ */
 @Service
 class JdbcRevocationService(private val jdbc: JdbcClient, private val queries: ChartQueries, private val clock: FamilyClock) :
     RevocationService {
     private val log = LoggerFactory.getLogger(JdbcRevocationService::class.java)
 
-    private data class LiveSticker(val id: Long, val status: StickerStatus, val prizeRequestId: Long?)
+    private data class LiveSticker(val id: Long, val status: StickerStatus, val prizeRequestId: Long?, val chartDate: LocalDate)
 
     override fun revokeLocked(
         childId: Long,
@@ -39,19 +43,26 @@ class JdbcRevocationService(private val jdbc: JdbcClient, private val queries: C
         val inRevision = planned.tasks.any { it.taskId == taskId }
         if (!inRevision || !completionExists) return TaskToggleResultDto(view(childId, planned, date, today), null, null)
 
-        val sticker = jdbc.sql("SELECT id, status, prize_request_id FROM live_sticker WHERE routine_id = ? AND chart_date = ?")
+        val sticker = jdbc.sql("SELECT id, status, prize_request_id, chart_date FROM live_sticker WHERE routine_id = ? AND chart_date = ?")
             .params(routineId, date)
-            .query { rs, _ ->
-                LiveSticker(
-                    rs.getLong("id"),
-                    StickerStatus.valueOf(rs.getString("status")),
-                    (rs.getObject("prize_request_id") as Number?)?.toLong(),
-                )
-            }.list().firstOrNull()
+            .query { rs, _ -> liveSticker(rs) }.list().firstOrNull()
 
+        // Checked here as well as in the shared step, so a USED sticker is refused before anything is written.
         if (sticker?.status == StickerStatus.USED) throw DomainException(ErrorCode.STICKER_USED)
         jdbc.sql("DELETE FROM task_completion WHERE task_id = ? AND chart_date = ?").params(taskId, date).update()
         if (sticker == null) return TaskToggleResultDto(view(childId, planned, date, today), null, null)
+
+        val label = planned.tasks.first { it.taskId == taskId }.label
+        val revoked = revokeStickerLocked(childId, sticker.id, taskId, label, note)
+        return TaskToggleResultDto(view(childId, planned, date, today), null, revoked)
+    }
+
+    override fun revokeStickerLocked(childId: Long, stickerId: Long, taskId: Long?, taskLabel: String, note: String?): RevokedStickerDto {
+        val sticker = jdbc.sql("SELECT id, status, prize_request_id, chart_date FROM live_sticker WHERE id = ? AND child_id = ?")
+            .params(stickerId, childId)
+            .query { rs, _ -> liveSticker(rs) }.list().firstOrNull()
+            ?: throw DomainException(ErrorCode.NOT_FOUND, "Sticker not found")
+        if (sticker.status == StickerStatus.USED) throw DomainException(ErrorCode.STICKER_USED)
 
         val now = LocalDateTime.ofInstant(clock.now(), ZoneOffset.UTC)
         var requestCancelled = false
@@ -75,27 +86,36 @@ class JdbcRevocationService(private val jdbc: JdbcClient, private val queries: C
             else -> Unit
         }
         jdbc.sql("UPDATE sticker SET status = 'REVOKED' WHERE id = ?").param(sticker.id).update()
-        val label = planned.tasks.first { it.taskId == taskId }.label
         jdbc.sql(
             "INSERT INTO sticker_revocation (sticker_id, child_id, chart_date, task_id, task_label, from_status, prize_request_id, " +
                 "request_cancelled, note, revoked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         ).params(
             listOf<Any?>(
-                sticker.id, childId, date, taskId, label, sticker.status.name, sticker.prizeRequestId, requestCancelled,
+                sticker.id, childId, sticker.chartDate, taskId, taskLabel, sticker.status.name, sticker.prizeRequestId, requestCancelled,
                 note?.takeIf { it.isNotBlank() }, now,
             ),
         ).update()
-        log.info("sticker revoked childId={} routineId={} date={} stickerId={}", childId, routineId, date, sticker.id)
-        return TaskToggleResultDto(
-            view(childId, planned, date, today),
-            null,
-            RevokedStickerDto(sticker.id, sticker.status, sticker.prizeRequestId, requestCancelled),
+        log.info(
+            "sticker revoked childId={} stickerId={} chartDate={} fromStatus={} taskId={}",
+            childId,
+            sticker.id,
+            sticker.chartDate,
+            sticker.status,
+            taskId,
         )
+        return RevokedStickerDto(sticker.id, sticker.status, sticker.prizeRequestId, requestCancelled)
     }
+
+    private fun liveSticker(rs: ResultSet) = LiveSticker(
+        rs.getLong("id"),
+        StickerStatus.valueOf(rs.getString("status")),
+        (rs.getObject("prize_request_id") as Number?)?.toLong(),
+        rs.getObject("chart_date", LocalDate::class.java),
+    )
 
     override fun revocationsFor(childId: Long, from: LocalDate, to: LocalDate): Map<LocalDate, List<RevocationDto>> = jdbc.sql(
         "SELECT r.sticker_id, r.child_id, r.chart_date, r.task_id, r.task_label, r.from_status, r.prize_request_id, " +
-            "r.request_cancelled, r.note, r.revoked_at, s.routine_id, s.routine_name, s.routine_icon_key, " +
+            "r.request_cancelled, r.note, r.revoked_at, s.routine_id, s.chore_id, s.routine_name, s.routine_icon_key, " +
             "d.id AS design_id, d.name AS design_name, d.artwork_key FROM sticker_revocation r " +
             "JOIN sticker s ON s.id = r.sticker_id LEFT JOIN sticker_design d ON d.id = s.design_id " +
             "WHERE r.child_id = ? AND r.chart_date BETWEEN ? AND ? ORDER BY r.revoked_at, r.sticker_id",
@@ -106,6 +126,7 @@ class JdbcRevocationService(private val jdbc: JdbcClient, private val queries: C
             childId = rs.getLong("child_id"),
             chartDate = rs.getObject("chart_date", LocalDate::class.java),
             routineId = (rs.getObject("routine_id") as Number?)?.toLong(),
+            choreId = (rs.getObject("chore_id") as Number?)?.toLong(),
             routineName = rs.getString("routine_name"),
             routineIconKey = rs.getString("routine_icon_key"),
             taskId = (rs.getObject("task_id") as Number?)?.toLong(),

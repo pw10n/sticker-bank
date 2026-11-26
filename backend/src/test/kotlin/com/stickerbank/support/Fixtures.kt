@@ -16,6 +16,9 @@ import java.time.ZoneOffset
 
 data class RoutineFixture(val routineId: Long, val revisionId: Long, val taskIds: List<Long>)
 
+/** [taskIds] are `chore_task.id`s, in position order. */
+data class ChoreFixture(val choreId: Long, val taskIds: List<Long>)
+
 /** SQL-only test data helpers; synthetic data only, independent of feature code. */
 class Fixtures(private val jdbc: JdbcClient, private val clock: Clock) {
     private fun now(): LocalDateTime = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)
@@ -101,6 +104,87 @@ class Fixtures(private val jdbc: JdbcClient, private val clock: Clock) {
             childId, if (routineId == null) "BONUS" else "ROUTINE", routineId, chartDate, routineName, routineIconKey,
             designId, status.name, prizeRequestId, now, if (designId != null) now else null, finishMode?.name,
         )
+    }
+
+    /**
+     * A chore and its tasks, straight in the database (TDD 6.9). [checked] holds the 0-based positions in [tasks] of the
+     * tasks to insert already checked, by [checkedBy]. [removed] soft-deletes it. A state that needs a sticker
+     * (AWAITING_PICK, EARNED) is this plus [createChoreSticker]; MISSED is a [dueDate] before today.
+     */
+    fun createChore(
+        childId: Long,
+        name: String = "Tidy the playroom",
+        tasks: List<Pair<String, String>> = listOf("Blocks in the box" to "basket", "Books on the shelf" to "open-book"),
+        dueDate: LocalDate? = null,
+        checked: Set<Int> = emptySet(),
+        iconKey: String = "broom",
+        checkedBy: String = "CHILD",
+        createdAt: LocalDateTime = now(),
+        removed: Boolean = false,
+    ): ChoreFixture {
+        val now = now()
+        val choreId =
+            insert(
+                "INSERT INTO chore (child_id, name, icon_key, due_date, created_at, updated_at, removed_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                childId,
+                name,
+                iconKey,
+                dueDate,
+                createdAt,
+                createdAt,
+                if (removed) now else null,
+            )
+        val taskIds =
+            tasks.mapIndexed { index, (label, icon) ->
+                val isChecked = index in checked
+                insert(
+                    "INSERT INTO chore_task (chore_id, position, label, icon_key, checked_at, checked_by) VALUES (?, ?, ?, ?, ?, ?)",
+                    choreId,
+                    index + 1,
+                    label,
+                    icon,
+                    if (isChecked) now else null,
+                    if (isChecked) checkedBy else null,
+                )
+            }
+        return ChoreFixture(choreId, taskIds)
+    }
+
+    /** Checks one chore task, as [by] (CHILD or PARENT). */
+    fun checkChoreTask(taskId: Long, by: String = "CHILD") {
+        jdbc.sql("UPDATE chore_task SET checked_at = ?, checked_by = ? WHERE id = ?").params(now(), by, taskId).update()
+    }
+
+    /**
+     * A chore's sticker in [status]: `source = CHORE`, `chore_id` set, no `routine_id`. [choices] are saved as its pick
+     * choices in slots 1 to 3, which an UNCLAIMED sticker offers and a REVOKED one hands on to the re-earn (FR-12.5).
+     * It does not check the chore's tasks: a chore with a live sticker should have every task checked.
+     */
+    fun createChoreSticker(
+        childId: Long,
+        choreId: Long,
+        chartDate: LocalDate,
+        status: StickerStatus,
+        designId: Long? = null,
+        prizeRequestId: Long? = null,
+        choreName: String? = "Tidy the playroom",
+        choreIconKey: String? = "broom",
+        finishMode: FinishMode? = FinishMode.TAPPED,
+        choices: List<Long> = emptyList(),
+    ): Long {
+        val now = now()
+        val stickerId =
+            insert(
+                "INSERT INTO sticker (child_id, source, chore_id, chart_date, routine_name, routine_icon_key, design_id, status, " +
+                    "prize_request_id, earned_at, claimed_at, finish_mode) VALUES (?, 'CHORE', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                childId, choreId, chartDate, choreName, choreIconKey,
+                designId, status.name, prizeRequestId, now, if (designId != null) now else null, finishMode?.name,
+            )
+        choices.forEachIndexed { index, design ->
+            jdbc.sql("INSERT INTO sticker_pick_choice (sticker_id, slot, design_id) VALUES (?, ?, ?)")
+                .params(stickerId, index + 1, design).update()
+        }
+        return stickerId
     }
 
     /** The pick pool: active, non-fallback designs that are uncategorised or in an enabled category. */

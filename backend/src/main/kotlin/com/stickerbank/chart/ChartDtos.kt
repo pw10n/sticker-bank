@@ -1,6 +1,8 @@
 package com.stickerbank.chart
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.stickerbank.chore.ChartChoreDto
+import com.stickerbank.chore.HistoryChoreDto
 import com.stickerbank.common.DesignRefDto
 import com.stickerbank.common.StickerPickDto
 import com.stickerbank.common.StickerStatus
@@ -50,6 +52,8 @@ data class DailyChartDto(
     val date: LocalDate,
     @get:JsonProperty("isToday") val isToday: Boolean,
     val routines: List<ChartRoutineDto>,
+    /** The child's chores for this day, oldest first (TDD 7.3 "Chores on the chart"). */
+    val chores: List<ChartChoreDto>,
     val unclaimedFromEarlierDays: List<UnclaimedStickerDto>,
 )
 
@@ -67,6 +71,12 @@ data class HistoryRoutineDto(
     val autoFinished: Boolean,
 )
 
-data class HistoryDayDto(val date: LocalDate, val routines: List<HistoryRoutineDto>, val revocations: List<RevocationDto>)
+data class HistoryDayDto(
+    val date: LocalDate,
+    val routines: List<HistoryRoutineDto>,
+    /** The chores finished or missed on this day, and for today also the ones still to do (FR-13.26). */
+    val chores: List<HistoryChoreDto>,
+    val revocations: List<RevocationDto>,
+)
 
 data class HistoryDto(val childId: Long, val from: LocalDate, val to: LocalDate, val days: List<HistoryDayDto>)

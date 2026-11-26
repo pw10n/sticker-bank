@@ -10,6 +10,8 @@ data class RevocationDto(
     val childId: Long,
     val chartDate: LocalDate,
     val routineId: Long?,
+    /** Set when the revoked sticker was earned by a chore; `routineId` is then null (TDD 8.3). */
+    val choreId: Long?,
     val routineName: String?,
     val routineIconKey: String?,
     val taskId: Long?,
