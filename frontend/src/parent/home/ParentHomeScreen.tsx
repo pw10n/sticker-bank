@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { useBootstrap, useParentPrizeRequests } from '../../api/hooks'
 import { Artwork } from '../../artwork'
-import { Card, PageHeader, Spinner } from '../../ui'
+import { Button, Card, PageHeader, Spinner } from '../../ui'
+import { ChoreFormSheet } from '../chores/ChoreForm'
 
 const LINK =
   'inline-flex min-h-11 items-center justify-center rounded-2xl border-2 border-ink/30 bg-white px-4 text-base font-bold text-ink focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink'
@@ -11,6 +13,8 @@ const PRIMARY =
 export default function ParentHomeScreen() {
   const bootstrap = useBootstrap()
   const pendingQuery = useParentPrizeRequests({ status: ['PENDING'] })
+  const [assigning, setAssigning] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
 
   if (bootstrap.isPending) return <Spinner label="Loading" />
   const children = bootstrap.data?.children ?? []
@@ -59,6 +63,9 @@ export default function ParentHomeScreen() {
                   <Link to={`/parent/children/${c.id}/routines`} className={LINK} aria-label={`Routines for ${c.name}`}>
                     Routines
                   </Link>
+                  <Link to={`/parent/chores?child=${c.id}`} className={LINK} aria-label={`Chores for ${c.name}`}>
+                    Chores
+                  </Link>
                   <Link to={`/parent/history/${c.id}`} className={LINK} aria-label={`History for ${c.name}`}>
                     History
                   </Link>
@@ -72,7 +79,20 @@ export default function ParentHomeScreen() {
         </ul>
       )}
 
+      {note && (
+        <p role="status" className="rounded-2xl bg-mint p-3 font-bold">
+          {note}
+        </p>
+      )}
       <div className="flex flex-wrap gap-3">
+        {children.length > 0 && (
+          <Button size="lg" onClick={() => setAssigning(true)}>
+            Assign a chore
+          </Button>
+        )}
+        <Link to="/parent/chores" className={LINK}>
+          Chores
+        </Link>
         {children.length > 0 && (
           <Link to="/parent/children/new" className={LINK}>
             Add a child
@@ -85,6 +105,13 @@ export default function ParentHomeScreen() {
           Settings
         </Link>
       </div>
+      {assigning && (
+        <ChoreFormSheet
+          mode={{ kind: 'assign', childIds: [] }}
+          onClose={() => setAssigning(false)}
+          onSaved={setNote}
+        />
+      )}
     </div>
   )
 }

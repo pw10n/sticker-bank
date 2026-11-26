@@ -1,17 +1,19 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { isApiError } from '../../api/errors'
 import {
+  useBootstrap,
   useDailyChart,
   useFinishRoutine,
   useHistory,
   usePendingPrizeRequest,
+  useRevokeChoreSticker,
   useRevokeSticker,
   useSkipRoutine,
   useToggleTask,
   useUnskipRoutine,
 } from '../../api/hooks'
-import type { ChartRoutine, ChartSticker, StickerPick, StickerStatus } from '../../api/types'
+import type { ChartChore, ChartRoutine, ChartSticker, StickerPick, StickerStatus } from '../../api/types'
 import { Artwork } from '../../artwork'
 import { useMode } from '../../app'
 import { Button, Sheet, Spinner } from '../../ui'
@@ -75,7 +77,14 @@ function timeLabel(iso: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
-type RevokeTarget = { taskId: number; taskLabel: string; routineName: string; sticker: ChartSticker }
+type RevokeTarget = {
+  taskId: number
+  taskLabel: string
+  routineName: string
+  sticker: ChartSticker
+  /** Set when the task belongs to a chore. */
+  chore?: { choreId: number; dueDate: string | null }
+}
 
 type PickInfo = { pick: StickerPick; routineName: string }
 
@@ -94,6 +103,9 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
   const [revokeNote, setRevokeNote] = useState('')
   const [note, setNote] = useState<string | null>(null)
   const revoke = useRevokeSticker(childId, date)
+  const revokeChore = useRevokeChoreSticker(childId)
+  const [removeChoreToo, setRemoveChoreToo] = useState(false)
+  const today = useBootstrap().data?.today
   const pendingRequest = usePendingPrizeRequest(childId)
   const history = useHistory(childId, date, date)
   const revocations = history.data?.days.find((d) => d.date === date)?.revocations ?? []
@@ -102,29 +114,51 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
     setRevokeTarget(null)
     setRevokeError(null)
     setRevokeNote('')
+    setRemoveChoreToo(false)
   }
 
   const onRevoke = () => {
-    if (revokeTarget == null || revoke.isPending) return
-    const { taskId } = revokeTarget
+    if (revokeTarget == null || revoke.isPending || revokeChore.isPending) return
+    const { taskId, chore } = revokeTarget
     const trimmed = revokeNote.trim()
     setRevokeError(null)
-    revoke.mutate(
-      { taskId, note: trimmed || undefined },
-      {
-        onSuccess: () => {
-          closeRevoke()
-          setPickInfo(null)
-          setNote('Sticker removed.')
-          onChanged()
-        },
-        onError: (e) => {
-          if (isApiError(e, 'STICKER_USED')) setRevokeError('used')
-          else setRevokeError('other')
-          void chart.refetch()
-        },
+    const callbacks = {
+      onSuccess: () => {
+        closeRevoke()
+        setPickInfo(null)
+        setNote('Sticker removed.')
+        onChanged()
       },
-    )
+      onError: (e: unknown) => {
+        if (isApiError(e, 'STICKER_USED')) setRevokeError('used')
+        else setRevokeError('other')
+        void chart.refetch()
+      },
+    }
+    if (chore) {
+      revokeChore.mutate(
+        { choreId: chore.choreId, taskId, note: trimmed || undefined, removeChore: removeChoreToo },
+        callbacks,
+      )
+    } else {
+      revoke.mutate({ taskId, note: trimmed || undefined }, callbacks)
+    }
+  }
+
+  const startChoreRevoke = (c: ChartChore, taskId: number) => {
+    if (revokeChore.isPending || !c.sticker) return
+    setError(null)
+    setNote(null)
+    setRevokeError(null)
+    setRevokeNote('')
+    setRemoveChoreToo(false)
+    setRevokeTarget({
+      taskId,
+      taskLabel: c.tasks.find((t) => t.taskId === taskId)?.label ?? '',
+      routineName: c.name,
+      sticker: c.sticker,
+      chore: { choreId: c.choreId, dueDate: c.dueDate },
+    })
   }
 
   const startRevoke = (r: ChartRoutine, taskId: number) => {
@@ -247,7 +281,9 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
       )}
       {chart.isPending && <Spinner />}
       {chart.isError && <p role="alert">Could not load this day.</p>}
-      {chart.data && chart.data.routines.length === 0 && <p>No routines on this day.</p>}
+      {chart.data && chart.data.routines.length === 0 && (chart.data.chores ?? []).length === 0 && (
+        <p>No routines on this day.</p>
+      )}
       <ul className="flex flex-col gap-4">
         {chart.data?.routines.map((r) => {
           const locked = r.state === 'EARNED' || r.state === 'AWAITING_PICK'
@@ -323,6 +359,87 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
           )
         })}
       </ul>
+      {(chart.data?.chores ?? []).length > 0 && (
+        <section aria-label="Chores" data-testid="day-chores" className="mt-4">
+          <h3 className="mb-2 text-lg font-bold">Chores</h3>
+          <ul className="flex flex-col gap-4">
+            {chart.data?.chores.map((c) => {
+              const finished = c.state === 'EARNED' || c.state === 'AWAITING_PICK'
+              const usedChore = finished && c.sticker?.revocable === false
+              const unfinished =
+                c.state === 'NOT_STARTED' || c.state === 'IN_PROGRESS' || c.state === 'READY_TO_FINISH'
+              return (
+                <li
+                  key={`chore-${c.choreId}`}
+                  aria-label={c.name}
+                  data-testid={`chore-${c.choreId}`}
+                  className="rounded-2xl border-2 border-ink/10 p-3"
+                >
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-lg font-bold">{c.name}</h4>
+                    <StateBadge state={c.state} doneCount={c.doneCount} taskCount={c.taskCount} />
+                  </div>
+                  <p className="mb-2 text-sm font-semibold">
+                    {c.doneCount} of {c.taskCount} done
+                    {c.dueDate ? ` · Due ${dayLabel(c.dueDate)}` : ''}
+                  </p>
+                  {c.sticker && <StickerReview sticker={c.sticker} />}
+                  {finished && (
+                    <p className="mb-2 text-sm font-bold">
+                      🔒 Sticker earned — locked. To remove the sticker, uncheck a done task.
+                    </p>
+                  )}
+                  {usedChore && (
+                    <p id={`used-chore-${c.choreId}`} className="mb-2 text-sm font-semibold">
+                      {USED_EXPLANATION}
+                    </p>
+                  )}
+                  <ul className="flex flex-col gap-1">
+                    {c.tasks.map((t) =>
+                      finished ? (
+                        <li key={t.taskId}>
+                          <button
+                            type="button"
+                            aria-pressed={t.done}
+                            aria-describedby={usedChore ? `used-chore-${c.choreId}` : undefined}
+                            disabled={revokeChore.isPending || !t.done || usedChore}
+                            onClick={() => startChoreRevoke(c, t.taskId)}
+                            className="flex min-h-11 w-full items-center gap-2 rounded-xl border-2 border-ink/10 px-3 text-left font-semibold focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-70"
+                          >
+                            <span aria-hidden="true">{t.done ? '☑' : '☐'}</span>
+                            {t.label}
+                            <span className="sr-only">{t.done ? ' (done)' : ' (not done)'}</span>
+                            {t.done && !usedChore && (
+                              <span className="ml-auto rounded-full border border-ink/40 px-2 text-sm font-bold">Uncheck</span>
+                            )}
+                          </button>
+                        </li>
+                      ) : (
+                        <li
+                          key={t.taskId}
+                          className="flex min-h-11 items-center gap-2 rounded-xl border-2 border-ink/10 px-3 font-semibold"
+                        >
+                          <span aria-hidden="true">{t.done ? '☑' : '☐'}</span>
+                          {t.label}
+                          <span className="sr-only">{t.done ? ' (done)' : ' (not done)'}</span>
+                        </li>
+                      ),
+                    )}
+                  </ul>
+                  {unfinished && today === date && (
+                    <Link
+                      to={`/parent/chores?child=${childId}`}
+                      className="mt-2 inline-flex min-h-11 items-center font-bold underline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                    >
+                      Manage chores
+                    </Link>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
       {revocations.length > 0 && (
         <section aria-label="Removed stickers" className="mt-4">
           <h3 className="mb-1 text-lg font-bold">Removed stickers</h3>
@@ -342,7 +459,7 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
       )}
       {revokeTarget && (
         <RevokeSheet
-          ownerKind="routine"
+          ownerKind={revokeTarget.chore ? 'chore' : 'routine'}
           ownerName={revokeTarget.routineName}
           taskLabel={revokeTarget.taskLabel}
           sticker={revokeTarget.sticker}
@@ -355,8 +472,19 @@ export function DayDetail({ childId, childName, date, onClose, onChanged }: Prop
           }
           note={revokeNote}
           onNote={setRevokeNote}
-          busy={revoke.isPending}
+          busy={revoke.isPending || revokeChore.isPending}
           errorKind={revokeError}
+          {...(revokeTarget.chore
+            ? {
+                outcome: removeChoreToo
+                  ? `${revokeTarget.routineName} will be removed.`
+                  : revokeTarget.chore.dueDate && today && revokeTarget.chore.dueDate < today
+                    ? 'Its due date has passed, so it will show as Missed.'
+                    : `${revokeTarget.routineName} will go back on ${childName}'s chart.`,
+                removeChore: removeChoreToo,
+                onRemoveChoreChange: setRemoveChoreToo,
+              }
+            : {})}
           onConfirm={onRevoke}
           onClose={closeRevoke}
         />

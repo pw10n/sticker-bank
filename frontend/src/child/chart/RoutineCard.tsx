@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState, type Ref } from 'react'
 import { Link } from 'react-router'
-import type { ChartRoutine } from '../../api/types'
+import type { ChartChore, ChartRoutine } from '../../api/types'
 import { Artwork } from '../../artwork'
 import { BigTile, DOUBLE_TAP_GUARD_MS, ProgressRing } from '../../ui'
+import { dueHint } from './dueHint'
+
+/** What the card draws: a routine, or a chore (the same shape plus a due date, and no colour of its own). */
+export type CardItem = ChartRoutine | ChartChore
 
 export interface RoutineCardProps {
-  routine: ChartRoutine
+  /** A routine, or a chore when `kind` is 'chore'. The prop keeps its name so routine callers are unchanged. */
+  routine: CardItem
+  /** Defaults to 'routine'. A chore adds the Chore tag and its due hint. */
+  kind?: 'routine' | 'chore'
+  /** The chart's date, for the chore's due hint. */
+  today?: string
   childId: number
   childColor: string
   highlighted: boolean
@@ -13,13 +22,15 @@ export interface RoutineCardProps {
   pendingTaskIds: ReadonlySet<number>
   /** True while this routine's I'm Done! request is in flight. */
   finishing?: boolean
-  onToggle(routine: ChartRoutine, taskId: number, done: boolean, tileEl: HTMLElement | null): void
-  onFinish?(routine: ChartRoutine): void
+  onToggle(routine: CardItem, taskId: number, done: boolean, tileEl: HTMLElement | null): void
+  onFinish?(routine: CardItem): void
   cardRef?: Ref<HTMLElement>
 }
 
 export function RoutineCard({
   routine,
+  kind = 'routine',
+  today,
   childId,
   childColor,
   highlighted,
@@ -31,7 +42,9 @@ export function RoutineCard({
   cardRef,
 }: RoutineCardProps) {
   const [expanded, setExpanded] = useState(false)
-  const accent = routine.color ?? childColor
+  const isChore = kind === 'chore'
+  const accent = ('color' in routine ? routine.color : null) ?? childColor
+  const hint = isChore && 'dueDate' in routine && today ? dueHint(routine.dueDate, today) : null
   const earned = routine.state === 'EARNED'
   const awaiting = routine.state === 'AWAITING_PICK'
   // Ready to finish is not locked: tasks stay tappable so a mistaken tap can be undone before I'm Done! (FR-6.7).
@@ -45,7 +58,16 @@ export function RoutineCard({
   const header = (
     <div className="flex items-center gap-4">
       <Artwork artKey={routine.iconKey} size={64} decorative />
-      <h2 className="flex-1 text-[1.6rem] font-bold leading-tight">{routine.name}</h2>
+      <div className="flex-1">
+        {isChore && <ChoreTag />}
+        <h2 className="text-[1.6rem] font-bold leading-tight">{routine.name}</h2>
+        {hint && (
+          <p data-testid="chore-due" className="mt-1 flex items-center gap-2 text-lg font-semibold">
+            <Artwork artKey="alarm-clock" size={28} decorative />
+            <span>{hint}</span>
+          </p>
+        )}
+      </div>
       {!earned && <ProgressRing done={routine.doneCount} total={routine.taskCount} size={88} color={accent} />}
     </div>
   )
@@ -55,11 +77,13 @@ export function RoutineCard({
       <section
         ref={cardRef}
         aria-label={routine.name}
+        data-kind={kind}
         style={{ borderColor: accent }}
         className="flex items-center gap-4 rounded-[2rem] border-4 bg-white p-4"
       >
         <Artwork artKey={routine.iconKey} size={56} decorative />
         <div className="flex-1">
+          {isChore && <ChoreTag />}
           <h2 className="text-[1.4rem] font-bold leading-tight">{routine.name}</h2>
           <p aria-live="polite" className="text-lg font-semibold">
             <span aria-hidden="true">✅ </span>Finished!
@@ -82,6 +106,7 @@ export function RoutineCard({
     <section
       ref={cardRef}
       aria-label={routine.name}
+      data-kind={kind}
       data-highlighted={highlighted || undefined}
       style={{ borderColor: accent, backgroundColor: 'color-mix(in srgb, var(--child-color) 14%, white)' }}
       className={`flex flex-col gap-5 rounded-[2.5rem] border-[6px] p-5 shadow-[0_8px_0_rgba(27,27,47,0.15)] ${
@@ -145,6 +170,18 @@ export function RoutineCard({
 
       {readyToFinish && canWrite && <FinishButton busy={finishing} onPress={() => onFinish?.(routine)} />}
     </section>
+  )
+}
+
+function ChoreTag() {
+  return (
+    <span
+      data-testid="chore-tag"
+      className="mb-1 inline-flex items-center gap-1 rounded-full border-2 border-ink/30 bg-white px-3 text-base font-bold"
+    >
+      <span aria-hidden="true">🧹</span>
+      <span>Chore</span>
+    </span>
   )
 }
 

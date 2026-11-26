@@ -207,6 +207,51 @@ export const handlers: RequestHandler[] = [
     }),
   ),
 
+  // Chores
+  http.post(
+    '*/api/parent/children/:childId/chores',
+    route(201, async (c) => fake.assignChore(idParam(c, 'childId'), await c.body())),
+  ),
+  http.get(
+    '*/api/parent/chores/recent',
+    route(200, () => fake.recentChores()),
+  ),
+  http.get(
+    '*/api/parent/chores',
+    route(200, (c) =>
+      fake.listChores({ filter: q(c, 'filter'), childId: intQuery(c, 'childId'), cursor: q(c, 'cursor') }),
+    ),
+  ),
+  http.put(
+    '*/api/parent/chores/:choreId',
+    route(200, async (c) => fake.saveChore(idParam(c, 'choreId'), await c.body())),
+  ),
+  http.delete(
+    '*/api/parent/chores/:choreId',
+    route(204, (c) => {
+      fake.removeChoreById(idParam(c, 'choreId'))
+    }),
+  ),
+  http.put(
+    '*/api/children/:childId/chores/:choreId/tasks/:taskId',
+    route(200, (c) => fake.checkChoreTask(idParam(c, 'childId'), idParam(c, 'choreId'), idParam(c, 'taskId'))),
+  ),
+  http.delete(
+    '*/api/children/:childId/chores/:choreId/tasks/:taskId',
+    route(200, async (c) => {
+      const body = (await c.body()) as { note?: string | null } | null
+      return fake.uncheckChoreTask(idParam(c, 'childId'), idParam(c, 'choreId'), idParam(c, 'taskId'), {
+        revokeSticker: q(c, 'revokeSticker') === 'true',
+        removeChore: q(c, 'removeChore') === 'true',
+        note: body?.note ?? null,
+      })
+    }),
+  ),
+  http.post(
+    '*/api/children/:childId/chores/:choreId/finish',
+    route(200, (c) => fake.finishChore(idParam(c, 'childId'), idParam(c, 'choreId'))),
+  ),
+
   // History
   http.get(
     '*/api/parent/children/:childId/history',

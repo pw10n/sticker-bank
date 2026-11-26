@@ -10,6 +10,8 @@ export type ScenarioName =
   | 'auto-finished'
   | 'empty-library'
   | 'pending-request'
+  | 'chore-waiting'
+  | 'chore-ready'
   | 'offline'
 
 export const SCENARIO_NAMES: readonly ScenarioName[] = [
@@ -21,6 +23,8 @@ export const SCENARIO_NAMES: readonly ScenarioName[] = [
   'auto-finished',
   'empty-library',
   'pending-request',
+  'chore-waiting',
+  'chore-ready',
   'offline',
 ]
 

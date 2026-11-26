@@ -34,6 +34,7 @@ const RoutineEditorScreen = lazy(() => import('../parent/routines/RoutineEditorS
 const HistoryScreen = lazy(() => import('../parent/history/HistoryScreen'))
 const LibraryScreen = lazy(() => import('../parent/library/LibraryScreen'))
 const PrizeRequestsScreen = lazy(() => import('../parent/prizes/PrizeRequestsScreen'))
+const ChoresScreen = lazy(() => import('../parent/chores/ChoresScreen'))
 
 export const router = createBrowserRouter([
   { path: '/', element: lazyEl(ChildPickerScreen), errorElement },
@@ -70,6 +71,7 @@ export const router = createBrowserRouter([
           { path: 'history/:childId', element: lazyEl(HistoryScreen) },
           { path: 'library', element: lazyEl(LibraryScreen) },
           { path: 'prizes', element: lazyEl(PrizeRequestsScreen) },
+          { path: 'chores', element: lazyEl(ChoresScreen) },
         ],
       },
     ],
