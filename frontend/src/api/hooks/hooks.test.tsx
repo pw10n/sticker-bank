@@ -44,6 +44,7 @@ const chart = (): DailyChart => ({
   date: '2026-01-05',
   isToday: true,
   routines: [routine()],
+  chores: [],
   unclaimedFromEarlierDays: [],
 })
 const design = { designId: 7, name: 'Star', artworkKey: 'star' }

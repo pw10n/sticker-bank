@@ -932,6 +932,7 @@ export function getDailyChart(childId: number, rawDate: string): DailyChart {
     date,
     isToday: date === today(),
     routines: scheduledRoutines(childId, date).map((r) => chartRoutine(r, date)),
+    chores: [],
     unclaimedFromEarlierDays: state.stickers
       .filter((s) => s.childId === childId && s.status === 'UNCLAIMED' && s.chartDate < date)
       .sort((a, b) => a.chartDate.localeCompare(b.chartDate) || a.id - b.id)
@@ -1157,6 +1158,7 @@ function revokeSticker(
     stickerId: sticker.id,
     childId: routine.childId,
     chartDate: date,
+    choreId: null,
     routineId: routine.id,
     routineName: routine.name,
     routineIconKey: routine.iconKey,
@@ -1214,6 +1216,7 @@ export function getHistory(childId: number, from: string | undefined, to: string
           autoFinished: stickerForRoutineDay(r.id, d)?.finishMode === 'AUTO',
         }
       }),
+      chores: [],
       revocations: state.revocations
         .filter((r) => r.childId === childId && r.chartDate === d)
         .sort((a, b) => a.revokedAt.localeCompare(b.revokedAt) || a.stickerId - b.stickerId)

@@ -1,5 +1,6 @@
 package com.stickerbank.chore
 
+import com.stickerbank.chart.RevokedStickerDto
 import com.stickerbank.common.Actor
 import java.time.LocalDate
 
@@ -52,5 +53,11 @@ interface ChoreSettlement {
 
 /** Called by ChoreService.undoTask inside the child lock. */
 interface ChoreRevoker {
-    fun revokeLocked(childId: Long, choreId: Long, taskId: Long, note: String?, removeChore: Boolean): ChoreResultDto
+    /**
+     * TDD 7.13 Revoke. Returns null, and changes nothing, when the chore has no live sticker (a repeated call).
+     * Otherwise it clears the check of task [taskId], revokes the chore's live sticker through
+     * `RevocationService.revokeStickerLocked` with that task's label, and with [removeChore] also sets `removed_at`.
+     * The caller builds the response: the chore's new state, or `chore = null` when it was removed.
+     */
+    fun revokeLocked(childId: Long, choreId: Long, taskId: Long, note: String?, removeChore: Boolean): RevokedStickerDto?
 }

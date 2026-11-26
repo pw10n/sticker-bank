@@ -54,6 +54,7 @@ function routine(status: StickerStatus | null, done = true): ChartRoutine {
 function revocation(over: Partial<Revocation> = {}): Revocation {
   return {
     childId: 1,
+    choreId: null,
     chartDate: DATE,
     routineId: 7,
     routineName: 'Morning Routine',
@@ -76,7 +77,8 @@ let posts: Request[]
 let postCount: number
 
 function install(opts: { chartRoutine: ChartRoutine; history?: History; deleteStatus?: number }) {
-  chart = { childId: 1, date: DATE, isToday: false, routines: [opts.chartRoutine], unclaimedFromEarlierDays: [] }
+  chart = { childId: 1, date: DATE, isToday: false, routines: [opts.chartRoutine],
+    chores: [], unclaimedFromEarlierDays: [] }
   posts = []
   postCount = 0
   server.use(

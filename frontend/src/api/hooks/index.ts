@@ -1,6 +1,7 @@
 export * from './bootstrap'
 export * from './chart'
 export * from './children'
+export * from './chores'
 export * from './history'
 export * from './library'
 export * from './parentPrizes'
