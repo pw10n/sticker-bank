@@ -7,11 +7,12 @@ export interface ToastChore {
 }
 
 /**
- * "New chore!" (FR-13.14). Fixed at the top of the screen with its own safe-area inset, so it moves nothing in the
- * layout. It has two neighbours it must never cover or be covered by: the offline banner above it (fixed at the top,
- * about 2.5rem tall plus the inset, so the toast starts at 3.25rem) and the update toast at the bottom (Parent Mode
- * only). The live region is always mounted so a screen reader announces the toast when it appears. The button is at
- * least 72 px tall; tapping it is up to the caller (scroll to the card).
+ * "New chore!" (FR-13.14). Fixed at the bottom of the screen with its own safe-area inset, so it moves nothing in the
+ * layout. The bottom keeps it clear of the child's header links and of the offline banner, which are both at the top.
+ * The only other thing that can sit at the bottom is the update toast (Parent Mode only, z-50): this toast is drawn
+ * above it, because it goes away by itself after a few seconds and the update toast stays. The live region is always
+ * mounted so a screen reader announces the toast when it appears. The button is at least 72 px tall; tapping it is up
+ * to the caller (scroll to the card).
  */
 export function NewChoreToast({ chores, onPress }: { chores: ToastChore[]; onPress(): void }) {
   const first = chores[0]
@@ -19,7 +20,7 @@ export function NewChoreToast({ chores, onPress }: { chores: ToastChore[]; onPre
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 top-[calc(3.25rem+env(safe-area-inset-top))] z-40 flex justify-center px-4"
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-[60] flex justify-center px-4"
     >
       {first && (
         <button

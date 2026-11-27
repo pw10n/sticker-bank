@@ -333,8 +333,8 @@ describe('new chore toast', () => {
     const region = toast.closest('[role="status"]')
     expect(region).not.toBeNull()
     expect(region).toHaveAttribute('aria-live', 'polite')
-    // Starts below the offline banner (about 2.5rem tall plus the inset), which is fixed at the top.
-    expect(region).toHaveClass('top-[calc(3.25rem+env(safe-area-inset-top))]')
+    // At the bottom, clear of the header links and the offline banner at the top, and drawn above the update toast.
+    expect(region).toHaveClass('fixed', 'bottom-[calc(1rem+env(safe-area-inset-bottom))]', 'z-[60]', 'pointer-events-none')
   })
 
   it('caps the width and truncates a long name after two lines', async () => {
