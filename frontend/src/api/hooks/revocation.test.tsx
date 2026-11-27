@@ -35,6 +35,7 @@ const chartOf = (doneCount: number): DailyChart => ({
   date: '2026-01-05',
   isToday: false,
   routines: [routine(doneCount)],
+  chores: [],
   unclaimedFromEarlierDays: [],
 })
 

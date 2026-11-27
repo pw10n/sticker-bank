@@ -7,7 +7,16 @@ import { ARTWORK, ARTWORK_LIST, artworkForUse } from './catalog'
 
 const SEED_KEYS = ['whale','lion','panda','unicorn','t-rex','octopus','rocket','ringed-planet','shooting-star','alien','crescent-moon','flying-saucer','taco','pizza','ice-cream','strawberry','doughnut','watermelon','racing-car','fire-engine','helicopter','sailboat','tractor','locomotive','glowing-star']
 
+const CHORE_KEYS = ['fork-and-knife-with-plate','wastebasket','dog','cat','fish','seedling','fallen-leaf','bucket','shopping-cart','package','books','mailbox']
+
 describe('catalog', () => {
+  it('has the chore icon pack for tasks and routines, never as stickers', () => {
+    for (const k of CHORE_KEYS) {
+      expect(ARTWORK[k]?.uses).toContain('task')
+      expect(ARTWORK[k]?.uses).toContain('routine')
+      expect(ARTWORK[k]?.uses).not.toContain('sticker')
+    }
+  })
   it('has every seed key as a sticker', () => {
     for (const k of SEED_KEYS) expect(ARTWORK[k]?.uses).toContain('sticker')
   })

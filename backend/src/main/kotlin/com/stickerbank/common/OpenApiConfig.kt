@@ -1,6 +1,7 @@
 package com.stickerbank.common
 
 import com.stickerbank.chart.RoutineDayState
+import com.stickerbank.chore.ChoreState
 import com.stickerbank.prize.PrizeCancelReason
 import com.stickerbank.prize.PrizeRequestStatus
 import com.stickerbank.sticker.DesignStatus
@@ -57,6 +58,7 @@ private val ENUMS: List<KClass<out Enum<*>>> =
         Weekday::class,
         Actor::class,
         RoutineDayState::class,
+        ChoreState::class,
         StickerStatus::class,
         StickerSource::class,
         PrizeRequestStatus::class,
@@ -100,6 +102,9 @@ private val OPERATIONS: Map<String, OperationSpec> =
         PUT|/api/children/{childId}/days/{date}/tasks/{taskId}|completeTask|chart|200|403,404,409,422|-|Complete a task
         DELETE|/api/children/{childId}/days/{date}/tasks/{taskId}|uncompleteTask|chart|200|400,403,404,409,422|-|Un-complete a task, or revoke its sticker (parent, revokeSticker=true)
         POST|/api/children/{childId}/days/{date}/routines/{routineId}/finish|finishRoutine|chart|200|403,404,409,422|-|I'm Done!: finish a routine whose tasks are all done and earn its sticker
+        PUT|/api/children/{childId}/chores/{choreId}/tasks/{taskId}|checkChoreTask|chore|200|403,404,409|-|Check a chore's task
+        DELETE|/api/children/{childId}/chores/{choreId}/tasks/{taskId}|undoChoreTask|chore|200|400,403,404,409|-|Uncheck a chore's task, or revoke its sticker (parent, revokeSticker=true)
+        POST|/api/children/{childId}/chores/{choreId}/finish|finishChore|chore|200|403,404,409|-|I'm Done!: finish a chore whose tasks are all checked and earn its sticker
         GET|/api/stickers/{stickerId}/pick|getStickerPick|sticker|200|404|-|Get the pick (choices) for an earned sticker
         POST|/api/stickers/{stickerId}/pick|claimStickerPick|sticker|200|400,403,404,409,422|-|Claim one of the offered designs
         GET|/api/children/{childId}/stickers|getStickerBook|sticker|200|404|-|Sticker book page
@@ -129,6 +134,11 @@ private val OPERATIONS: Map<String, OperationSpec> =
         PUT|/api/parent/routines/{routineId}/skips/{date}|addRoutineSkip|routine|204|401,403,404,409|S|Skip a routine on a day
         DELETE|/api/parent/routines/{routineId}/skips/{date}|removeRoutineSkip|routine|204|401,403,404|S|Remove a routine skip
         GET|/api/parent/children/{childId}/history|getHistory|history|200|400,401,404|S|Child history over a date range
+        POST|/api/parent/children/{childId}/chores|assignChore|chore|201|400,401,403,404,409|S|Assign a chore to a child
+        GET|/api/parent/chores|listChores|chore|200|400,401,404|S|List the family's chores: active, or closed in pages
+        GET|/api/parent/chores/recent|getRecentChores|chore|200|401|S|Recently assigned chores, to fill in the form
+        PUT|/api/parent/chores/{choreId}|saveChore|chore|200|400,401,403,404,409|S|Save a chore's whole definition (edit, or reopen a missed chore)
+        DELETE|/api/parent/chores/{choreId}|removeChore|chore|204|401,403,404,409|S|Remove a chore that has no sticker
         GET|/api/parent/library/designs|listDesigns|library|200|401|S|List sticker designs
         POST|/api/parent/library/designs|createDesign|library|201|400,401,403|S|Add a sticker design
         PUT|/api/parent/library/designs/{designId}|updateDesign|library|200|400,401,403,404|S|Update a sticker design
@@ -296,6 +306,29 @@ private class ContractShaper(private val api: OpenAPI) {
                         "without it an earned routine answers 409 REVOKE_CONFIRMATION_REQUIRED"
                     it.schema = typed("boolean").apply { default = false }
                 }
+            "undoChoreTask" -> {
+                param("revokeSticker")?.let {
+                    it.required = false
+                    it.description =
+                        "Parent only. true revokes the chore's earned sticker (TDD 7.13); " +
+                        "without it a finished chore answers 409 REVOKE_CONFIRMATION_REQUIRED"
+                    it.schema = typed("boolean").apply { default = false }
+                }
+                param("removeChore")?.let {
+                    it.required = false
+                    it.description = "Parent only, with revokeSticker=true: also removes the chore; the response then has chore = null"
+                    it.schema = typed("boolean").apply { default = false }
+                }
+            }
+            "listChores" -> {
+                param("filter")?.let {
+                    it.required = true
+                    it.description = "active: every unfinished chore, unpaged. closed: finished, and missed in the last 30 days, in pages"
+                    it.schema = typed("string").apply { enum = listOf("active", "closed") }
+                }
+                optional("childId", typed("integer", "int64"))
+                optional("cursor", typed("string"))
+            }
             "getStickerBook" -> {
                 optional("status", typed("string").apply { enum = listOf("AVAILABLE", "PENDING", "USED") })
                 optional("cursor", typed("string"))

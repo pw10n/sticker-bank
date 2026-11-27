@@ -34,6 +34,7 @@ function chart(done10: boolean, done11: boolean): DailyChart {
     date: KEY_DATE,
     isToday: false,
     routines: [routine(done10, done11)],
+    chores: [],
     unclaimedFromEarlierDays: [],
   }
 }

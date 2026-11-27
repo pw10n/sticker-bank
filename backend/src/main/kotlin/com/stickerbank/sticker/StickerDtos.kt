@@ -5,7 +5,7 @@ import com.stickerbank.common.StickerStatus
 import java.time.Instant
 import java.time.LocalDate
 
-enum class StickerSource { ROUTINE, BONUS }
+enum class StickerSource { ROUTINE, BONUS, CHORE }
 
 data class PickClaimRequest(val designId: Long)
 

@@ -1,4 +1,4 @@
-export type SoundName = 'pop' | 'fanfare' | 'stick' | 'tap' | 'error'
+export type SoundName = 'pop' | 'fanfare' | 'stick' | 'tap' | 'error' | 'chime'
 
 type Shape = OscillatorType
 
@@ -35,6 +35,10 @@ export function synthesize(ctx: AudioContext, name: SoundName): void {
       break
     case 'error':
       blip(ctx, { type: 'square', from: 140, dur: 0.15, gain: 0.08 })
+      break
+    case 'chime':
+      blip(ctx, { type: 'sine', from: 783.99, dur: 0.22, gain: 0.2 })
+      blip(ctx, { type: 'sine', from: 1046.5, start: 0.16, dur: 0.4, gain: 0.2 })
       break
     case 'fanfare':
       NOTES.forEach((f, i) => {

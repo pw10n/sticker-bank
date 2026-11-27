@@ -1,6 +1,8 @@
 package com.stickerbank.chart
 
+import com.stickerbank.chore.ChoreSettlement
 import com.stickerbank.common.ChildLock
+import com.stickerbank.common.EarnSource
 import com.stickerbank.common.FamilyClock
 import com.stickerbank.common.FinishMode
 import com.stickerbank.common.StickerEarner
@@ -18,6 +20,9 @@ import java.time.LocalDate
  * server that was down at midnight gives the same result. `child.settled_through` is the watermark: days up to and
  * including it are never auto-finished again, which is what keeps a parent's later edit of a past day (FR-6.5) Ready to
  * finish until a parent taps I'm Done!.
+ *
+ * The same pass then finishes the child's chores that were fully checked when their due date ended (TDD 7.12 step 5),
+ * through [ChoreSettlement].
  */
 @Service
 class DaySettlement(
@@ -27,6 +32,7 @@ class DaySettlement(
     private val queries: ChartQueries,
     private val earner: StickerEarner,
     private val clock: FamilyClock,
+    private val choreSettlement: ChoreSettlement,
 ) {
     private data class Mark(val settledThrough: LocalDate?)
 
@@ -46,7 +52,11 @@ class DaySettlement(
         val settledThrough = mark.settledThrough
         // A child with no watermark has nothing waiting: a new child has no ended days, and before V5 the last task
         // earned the sticker at once, so no fully done routine was left waiting.
-        if (settledThrough != null) finishEndedDays(childId, settledThrough.plusDays(1), yesterday)
+        if (settledThrough != null) {
+            finishEndedDays(childId, settledThrough.plusDays(1), yesterday)
+            // TDD 7.12 step 5: after the routines and before the watermark moves. Not limited to the days settled above.
+            choreSettlement.finishDueChoresLocked(childId, yesterday.plusDays(1))
+        }
         jdbc.sql("UPDATE child SET settled_through = ? WHERE id = ?").params(yesterday, childId).update()
     }
 
@@ -63,7 +73,7 @@ class DaySettlement(
                 if (!routine.tasks.all { it.taskId in done }) continue
                 earner.earn(
                     childId,
-                    routine.routineId,
+                    EarnSource.Routine(routine.routineId),
                     date,
                     routine.name,
                     routine.iconKey,

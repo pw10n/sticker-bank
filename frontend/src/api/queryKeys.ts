@@ -20,6 +20,9 @@ export const qk = {
     categories: () => ['parent', 'categories'] as const,
     prizeRequests: (filters: { status?: PrizeRequestStatus[]; childId?: number }) =>
       ['parent', 'prizeRequests', filters] as const,
+    chores: (filters: { filter: 'active' | 'closed'; childId?: number }) =>
+      ['parent', 'chores', filters] as const,
+    recentChores: () => ['parent', 'chores', 'recent'] as const,
   },
 }
 

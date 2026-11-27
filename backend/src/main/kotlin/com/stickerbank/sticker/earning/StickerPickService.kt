@@ -3,6 +3,7 @@ package com.stickerbank.sticker.earning
 import com.stickerbank.common.ChildLock
 import com.stickerbank.common.DesignRefDto
 import com.stickerbank.common.DomainException
+import com.stickerbank.common.EarnSource
 import com.stickerbank.common.ErrorCode
 import com.stickerbank.common.FinishMode
 import com.stickerbank.common.StickerEarner
@@ -35,23 +36,32 @@ class StickerPickService(
 
     override fun earn(
         childId: Long,
-        routineId: Long,
+        source: EarnSource,
         chartDate: LocalDate,
-        routineName: String,
-        routineIconKey: String,
+        label: String,
+        iconKey: String,
         finishMode: FinishMode,
         earnedAt: Instant?,
     ): StickerPickDto {
         val now = earnedAt?.let { LocalDateTime.ofInstant(it, ZoneOffset.UTC) } ?: now()
         val keys = GeneratedKeyHolder()
-        jdbc.sql(
-            "INSERT INTO sticker (child_id, source, routine_id, chart_date, routine_name, routine_icon_key, design_id, status, " +
-                "earned_at, finish_mode) VALUES (?, 'ROUTINE', ?, ?, ?, ?, NULL, 'UNCLAIMED', ?, ?)",
-        ).params(childId, routineId, chartDate, routineName, routineIconKey, now, finishMode.name).update(keys)
+        // The owner column that is not named stays NULL: a routine sticker has no chore_id, a chore sticker no routine_id.
+        when (source) {
+            is EarnSource.Routine ->
+                jdbc.sql(
+                    "INSERT INTO sticker (child_id, source, routine_id, chart_date, routine_name, routine_icon_key, design_id, status, " +
+                        "earned_at, finish_mode) VALUES (?, 'ROUTINE', ?, ?, ?, ?, NULL, 'UNCLAIMED', ?, ?)",
+                ).params(childId, source.routineId, chartDate, label, iconKey, now, finishMode.name).update(keys)
+            is EarnSource.Chore ->
+                jdbc.sql(
+                    "INSERT INTO sticker (child_id, source, chore_id, chart_date, routine_name, routine_icon_key, design_id, status, " +
+                        "earned_at, finish_mode) VALUES (?, 'CHORE', ?, ?, ?, ?, NULL, 'UNCLAIMED', ?, ?)",
+                ).params(childId, source.choreId, chartDate, label, iconKey, now, finishMode.name).update(keys)
+        }
         val stickerId = requireNotNull(keys.key).toLong()
 
         // FR-12.5: re-earning after a revoke offers the same choices again. Otherwise draw a fresh set (FR-7.7).
-        val offered = previousChoices(routineId, chartDate).ifEmpty { ChoiceSelector.select(activePool(), random) }
+        val offered = previousChoices(source, chartDate).ifEmpty { ChoiceSelector.select(activePool(), random) }
 
         val result = if (offered.isEmpty()) {
             val fallbackId = jdbc.sql("SELECT id FROM sticker_design WHERE is_fallback = TRUE ORDER BY id LIMIT 1")
@@ -62,7 +72,7 @@ class StickerPickService(
                 stickerId = stickerId,
                 childId = childId,
                 chartDate = chartDate,
-                routineName = routineName,
+                routineName = label,
                 status = StickerStatus.AVAILABLE,
                 autoAwarded = true,
                 choices = emptyList(),
@@ -77,14 +87,21 @@ class StickerPickService(
                 stickerId = stickerId,
                 childId = childId,
                 chartDate = chartDate,
-                routineName = routineName,
+                routineName = label,
                 status = StickerStatus.UNCLAIMED,
                 autoAwarded = false,
                 choices = choicesOf(stickerId),
                 claimed = null,
             )
         }
-        log.info("sticker earned stickerId={} childId={} chartDate={} finishMode={}", stickerId, childId, chartDate, finishMode)
+        log.info(
+            "sticker earned stickerId={} childId={} source={} chartDate={} finishMode={}",
+            stickerId,
+            childId,
+            sourceName(source),
+            chartDate,
+            finishMode,
+        )
         return result
     }
 
@@ -161,20 +178,40 @@ class StickerPickService(
     ).query(Long::class.java).list().map { requireNotNull(it) }
 
     /**
-     * The choices, in slot order, of the latest revoked sticker for this routine and day that still has any (BR-6).
-     * Choice rows are kept after a claim or a revoke so a re-earn can offer them again. Like an unclaimed pick (BR-8),
-     * the set is reused as saved even if a design was retired since.
+     * The choices, in slot order, of the latest revoked sticker from the same source that still has any (BR-6, TDD 7.5
+     * step 2): the same routine and day, or the same chore on any date. Choice rows are kept after a claim or a revoke so
+     * a re-earn can offer them again. Like an unclaimed pick (BR-8), the set is reused as saved even if a design was
+     * retired since. A routine never sees a chore's choices and the other way round: each looks up its own owner column.
      */
-    private fun previousChoices(routineId: Long, chartDate: LocalDate): List<Long> = jdbc.sql(
-        """
-        SELECT c.design_id FROM sticker_pick_choice c
-         WHERE c.sticker_id = (SELECT s.id FROM sticker s
-                                WHERE s.routine_id = ? AND s.chart_date = ? AND s.status = 'REVOKED'
-                                  AND EXISTS (SELECT 1 FROM sticker_pick_choice x WHERE x.sticker_id = s.id)
-                                ORDER BY s.id DESC LIMIT 1)
-         ORDER BY c.slot
-        """.trimIndent(),
-    ).params(routineId, chartDate).query(Long::class.java).list().map { requireNotNull(it) }
+    private fun previousChoices(source: EarnSource, chartDate: LocalDate): List<Long> = when (source) {
+        is EarnSource.Routine ->
+            jdbc.sql(
+                """
+                SELECT c.design_id FROM sticker_pick_choice c
+                 WHERE c.sticker_id = (SELECT s.id FROM sticker s
+                                        WHERE s.routine_id = ? AND s.chart_date = ? AND s.status = 'REVOKED'
+                                          AND EXISTS (SELECT 1 FROM sticker_pick_choice x WHERE x.sticker_id = s.id)
+                                        ORDER BY s.id DESC LIMIT 1)
+                 ORDER BY c.slot
+                """.trimIndent(),
+            ).params(source.routineId, chartDate)
+        is EarnSource.Chore ->
+            jdbc.sql(
+                """
+                SELECT c.design_id FROM sticker_pick_choice c
+                 WHERE c.sticker_id = (SELECT s.id FROM sticker s
+                                        WHERE s.chore_id = ? AND s.status = 'REVOKED'
+                                          AND EXISTS (SELECT 1 FROM sticker_pick_choice x WHERE x.sticker_id = s.id)
+                                        ORDER BY s.id DESC LIMIT 1)
+                 ORDER BY c.slot
+                """.trimIndent(),
+            ).param(source.choreId)
+    }.query(Long::class.java).list().map { requireNotNull(it) }
+
+    private fun sourceName(source: EarnSource): String = when (source) {
+        is EarnSource.Routine -> "routine:${source.routineId}"
+        is EarnSource.Chore -> "chore:${source.choreId}"
+    }
 
     private fun designRef(designId: Long): DesignRefDto =
         jdbc.sql("SELECT id, name, artwork_key FROM sticker_design WHERE id = ?").param(designId)

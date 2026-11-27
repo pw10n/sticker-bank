@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
+import { server } from '../../mocks/server'
 import { describe, expect, it, vi } from 'vitest'
 import { getFakeState, resetFakeApi, setFakeParentSession, DEMO_PIN, type ScenarioName } from '../../mocks/fakeApi'
 import ParentGuard from '../ParentGuard'
@@ -150,6 +152,28 @@ describe('ParentHomeScreen', () => {
     const first = getFakeState().children[0]
     expect(await screen.findByRole('heading', { name: first.name })).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: /Routines for/ }).length).toBeGreaterThan(0)
+  })
+
+  it('links to Chores, for the family and for each child', async () => {
+    setup('/parent', 'default', true)
+    const first = getFakeState().children[0]
+    expect(await screen.findByRole('link', { name: `Chores for ${first.name}` })).toHaveAttribute(
+      'href',
+      `/parent/chores?child=${first.id}`,
+    )
+    expect(screen.getByRole('link', { name: 'Chores' })).toHaveAttribute('href', '/parent/chores')
+    // The Parent Mode navigation keeps its five items.
+    expect(within(screen.getByRole('navigation', { name: 'Parent Mode' })).getAllByRole('link')).toHaveLength(5)
+  })
+
+  it('Assign a chore opens the form with no child ticked', async () => {
+    server.use(http.get('*/api/parent/chores/recent', () => HttpResponse.json([])))
+    const { user } = setup('/parent', 'default', true)
+    await user.click(await screen.findByRole('button', { name: 'Assign a chore' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Assign a chore' })
+    const boxes = within(dialog).getAllByRole('checkbox')
+    expect(boxes.length).toBe(getFakeState().children.length)
+    for (const b of boxes) expect(b).not.toBeChecked()
   })
 })
 

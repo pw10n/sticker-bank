@@ -1,5 +1,6 @@
 package com.stickerbank.chart
 
+import com.stickerbank.chore.ChoreReader
 import com.stickerbank.common.Actor
 import com.stickerbank.common.DomainException
 import com.stickerbank.common.ErrorCode
@@ -13,6 +14,7 @@ class ChartService(
     private val plans: RoutinePlanQuery,
     private val clock: FamilyClock,
     private val settlement: DaySettlement,
+    private val choreReader: ChoreReader,
 ) {
     fun dailyChart(childId: Long, rawDate: String, actor: Actor = Actor.CHILD): DailyChartDto {
         val today = clock.today()
@@ -23,13 +25,15 @@ class ChartService(
         val plan = plans.planFor(childId, date)
         val completed = queries.completions(childId, date, date)[date].orEmpty()
         val stickers = queries.stickers(childId, date, date)
+        val parent = actor == Actor.PARENT
         return DailyChartDto(
             childId = childId,
             date = date,
             isToday = date == today,
             routines = plan.map {
-                ChartQueries.routineDto(it, date, today, completed, stickers[it.routineId to date], actor == Actor.PARENT)
+                ChartQueries.routineDto(it, date, today, completed, stickers[it.routineId to date], parent)
             },
+            chores = choreReader.choresByDay(childId, date, date, today, parent)[date].orEmpty(),
             unclaimedFromEarlierDays = queries.unclaimedBefore(childId, today),
         )
     }

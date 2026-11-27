@@ -5,6 +5,7 @@ import {
   getState,
   resetState,
   seedChild,
+  seedChore,
   seedCompletion,
   seedPrizeRequest,
   seedRoutine,
@@ -199,6 +200,42 @@ export function buildScenario(name: ScenarioName): void {
       seedPrizeRequest({ childId: child.id, stickerIds: available.map((s) => s.id), status: 'PENDING', createdBy: 'CHILD' })
       break
     }
+    case 'chore-waiting': {
+      // Jane has two chores to do (TDD 12.5). The watermark is set, as any chore write would have set it (7.12).
+      child.settledThrough = addDays(t, -1)
+      seedChore({
+        childId: child.id,
+        name: 'Feed the fish',
+        iconKey: 'fish',
+        tasks: [{ label: 'Feed the fish', iconKey: 'fish' }],
+      })
+      seedChore({
+        childId: child.id,
+        name: 'Tidy the playroom',
+        iconKey: 'broom',
+        dueDate: t,
+        tasks: [
+          { label: 'Blocks in the box', iconKey: 'basket', checked: true },
+          { label: 'Books on the shelf', iconKey: 'open-book' },
+          { label: 'Teddies on the bed', iconKey: 'teddy-bear' },
+        ],
+      })
+      break
+    }
+    case 'chore-ready':
+      // Every task is checked but I'm Done! has not been tapped, so there is no sticker yet (BR-21).
+      child.settledThrough = addDays(t, -1)
+      seedChore({
+        childId: child.id,
+        name: 'Tidy the playroom',
+        iconKey: 'broom',
+        tasks: [
+          { label: 'Blocks in the box', iconKey: 'basket', checked: true },
+          { label: 'Books on the shelf', iconKey: 'open-book', checked: true },
+          { label: 'Teddies on the bed', iconKey: 'teddy-bear', checked: true },
+        ],
+      })
+      break
     case 'offline':
       state.offline = true
       break

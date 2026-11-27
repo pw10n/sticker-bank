@@ -91,7 +91,8 @@ class ChartControllerWebTest {
     @Test
     fun `chart returns json`() {
         every { sessions.hasValidSession(any()) } returns false
-        every { charts.dailyChart(1, "today") } returns DailyChartDto(1, LocalDate.of(2026, 10, 15), true, emptyList(), emptyList())
+        every { charts.dailyChart(1, "today") } returns
+            DailyChartDto(1, LocalDate.of(2026, 10, 15), true, emptyList(), emptyList(), emptyList())
         mvc.perform(get("/api/children/1/days/today"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.isToday").value(true))

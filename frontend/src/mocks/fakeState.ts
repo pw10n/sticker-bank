@@ -6,19 +6,28 @@
  * Operations throw `FakeApiError`, which the handlers turn into `application/problem+json`.
  */
 import type { ErrorCode } from '../api/errors'
+import { getArtwork } from '../artwork/catalog'
 import type {
   Actor,
   Bootstrap,
   BookSticker,
   Category,
   Child,
+  ChartChore,
   ChartRoutine,
+  ChartSticker,
+  Chore,
+  ChorePage,
+  ChoreResult,
+  ChoreState,
+  ChoreSuggestion,
   DailyChart,
   Design,
   DesignRef,
   DesignStatus,
   FieldError,
   History,
+  HistoryChore,
   HistoryDay,
   Library,
   PendingPrizeRequest,
@@ -118,10 +127,36 @@ export interface FakeRoutine {
   upcomingSkips: string[]
 }
 
+/** A chore's task. Chore task ids are their own id space (never a routine task id). */
+export interface FakeChoreTask {
+  id: number
+  label: string
+  iconKey: string
+  position: number
+  /** Who checked it, `null` = unchecked. A check is on the chore itself, not per day (BR-23). */
+  checkedBy: Actor | null
+  checkedAt: string | null
+}
+
+export interface FakeChore {
+  id: number
+  childId: number
+  name: string
+  iconKey: string
+  /** `YYYY-MM-DD`, or `null` = carries over until finished or removed. */
+  dueDate: string | null
+  tasks: FakeChoreTask[]
+  createdAt: string
+  /** Soft remove (I-33): the chore leaves every list, its stickers and revocations stay. */
+  removed: boolean
+}
+
 export interface FakeSticker {
   id: number
   childId: number
   routineId: number | null
+  /** Set for `source: 'CHORE'` stickers. Their `routineName` / `routineIconKey` hold the chore's name and icon. */
+  choreId: number | null
   chartDate: string
   routineName: string | null
   routineIconKey: string | null
@@ -170,7 +205,17 @@ export interface FakeCategory {
   position: number
 }
 
-export type IdKind = 'child' | 'task' | 'routine' | 'sticker' | 'design' | 'category' | 'request' | 'revocation'
+export type IdKind =
+  | 'child'
+  | 'task'
+  | 'routine'
+  | 'sticker'
+  | 'design'
+  | 'category'
+  | 'request'
+  | 'revocation'
+  | 'chore'
+  | 'choreTask'
 
 export interface FakeState {
   settings: FakeSettings
@@ -179,6 +224,7 @@ export interface FakeState {
   offline: boolean
   children: FakeChild[]
   routines: FakeRoutine[]
+  chores: FakeChore[]
   /** Completed tasks, keyed `taskId|date`. */
   completions: Set<string>
   stickers: FakeSticker[]
@@ -260,13 +306,25 @@ function createState(): FakeState {
     offline: false,
     children: [],
     routines: [],
+    chores: [],
     completions: new Set(),
     stickers: [],
     designs: [],
     categories: [],
     prizeRequests: [],
     revocations: [],
-    nextId: { child: 1, task: 1, routine: 1, sticker: 1, design: 1, category: 1, request: 1, revocation: 1 },
+    nextId: {
+      child: 1,
+      task: 1,
+      routine: 1,
+      sticker: 1,
+      design: 1,
+      category: 1,
+      request: 1,
+      revocation: 1,
+      chore: 1,
+      choreTask: 1,
+    },
     rng: 42,
   }
   SEED_CATEGORIES.forEach(([name, designs], i) => {
@@ -658,6 +716,7 @@ export function deleteChild(childId: number): void {
   const taskIds = new Set(state.routines.filter((r) => r.childId === childId).flatMap((r) => r.tasks.map((t) => t.id)))
   state.children = state.children.filter((c) => c.id !== childId)
   state.routines = state.routines.filter((r) => r.childId !== childId)
+  state.chores = state.chores.filter((c) => c.childId !== childId)
   state.stickers = state.stickers.filter((s) => s.childId !== childId)
   state.prizeRequests = state.prizeRequests.filter((r) => r.childId !== childId)
   state.revocations = state.revocations.filter((r) => r.childId !== childId)
@@ -885,6 +944,18 @@ function routineState(
   return done > 0 ? 'IN_PROGRESS' : 'NOT_STARTED'
 }
 
+/** A chart sticker. The review fields are only filled in for a parent session (TDD 7.3). */
+function chartSticker(sticker: FakeSticker): ChartSticker {
+  return {
+    stickerId: sticker.id,
+    status: sticker.status,
+    design: sticker.designId !== null ? designRef(sticker.designId) : null,
+    prizeRequestId: state.parentSession ? sticker.prizeRequestId : null,
+    revocable: state.parentSession ? sticker.status !== 'USED' : null,
+    autoFinished: state.parentSession ? sticker.finishMode === 'AUTO' : null,
+  }
+}
+
 function chartRoutine(r: FakeRoutine, date: string): ChartRoutine {
   const tasks = r.tasks.map((t) => ({
     taskId: t.id,
@@ -903,16 +974,7 @@ function chartRoutine(r: FakeRoutine, date: string): ChartRoutine {
     doneCount: done,
     taskCount: tasks.length,
     tasks,
-    sticker: sticker
-      ? {
-          stickerId: sticker.id,
-          status: sticker.status,
-          design: sticker.designId !== null ? designRef(sticker.designId) : null,
-          prizeRequestId: state.parentSession ? sticker.prizeRequestId : null,
-          revocable: state.parentSession ? sticker.status !== 'USED' : null,
-          autoFinished: state.parentSession ? sticker.finishMode === 'AUTO' : null,
-        }
-      : null,
+    sticker: sticker ? chartSticker(sticker) : null,
   }
 }
 
@@ -932,6 +994,7 @@ export function getDailyChart(childId: number, rawDate: string): DailyChart {
     date,
     isToday: date === today(),
     routines: scheduledRoutines(childId, date).map((r) => chartRoutine(r, date)),
+    chores: choresForDay(childId, date).map(chartChore),
     unclaimedFromEarlierDays: state.stickers
       .filter((s) => s.childId === childId && s.status === 'UNCLAIMED' && s.chartDate < date)
       .sort((a, b) => a.chartDate.localeCompare(b.chartDate) || a.id - b.id)
@@ -966,12 +1029,49 @@ function shuffled<T>(items: T[]): T[] {
   return a
 }
 
-/** Choices of the latest revoked sticker for this routine and day that still has some (FR-12.5). */
-function previousChoices(routineId: number, date: string): number[] {
-  const revoked = state.stickers.filter(
-    (s) => s.routineId === routineId && s.chartDate === date && s.source === 'ROUTINE' && s.status === 'REVOKED' && s.choices.length > 0,
-  )
+type EarnSource = { kind: 'routine'; routine: FakeRoutine; date: string } | { kind: 'chore'; chore: FakeChore; date: string }
+
+/** Choices of the latest revoked sticker from the same source that still has some (FR-12.5, TDD 7.5 step 2). */
+function previousChoices(source: EarnSource): number[] {
+  const revoked = state.stickers.filter((s) =>
+    source.kind === 'routine'
+      ? s.routineId === source.routine.id && s.chartDate === source.date && s.source === 'ROUTINE'
+      : s.choreId === source.chore.id && s.source === 'CHORE',
+  ).filter((s) => s.status === 'REVOKED' && s.choices.length > 0)
   return revoked.length > 0 ? [...revoked[revoked.length - 1].choices] : []
+}
+
+/** TDD 7.5 "Earn", for either source: UNCLAIMED with up to 3 choices, or the AVAILABLE fallback. */
+function earn(source: EarnSource, finishMode: 'TAPPED' | 'AUTO', earnedAt: string): FakeSticker {
+  const reused = previousChoices(source)
+  const choices =
+    reused.length > 0
+      ? reused
+      : shuffled(designPool())
+          .slice(0, 3)
+          .map((d) => d.id)
+  const auto = choices.length === 0
+  const owner = source.kind === 'routine' ? source.routine : source.chore
+  const sticker: FakeSticker = {
+    id: newId('sticker'),
+    childId: owner.childId,
+    routineId: source.kind === 'routine' ? source.routine.id : null,
+    choreId: source.kind === 'chore' ? source.chore.id : null,
+    chartDate: source.date,
+    routineName: owner.name,
+    routineIconKey: owner.iconKey,
+    source: source.kind === 'routine' ? 'ROUTINE' : 'CHORE',
+    status: auto ? 'AVAILABLE' : 'UNCLAIMED',
+    designId: auto ? fallbackDesign().id : null,
+    choices,
+    autoAwarded: auto,
+    prizeRequestId: null,
+    earnedAt,
+    claimedAt: auto ? earnedAt : null,
+    finishMode,
+  }
+  state.stickers.push(sticker)
+  return sticker
 }
 
 /**
@@ -984,34 +1084,17 @@ export function earnSticker(
   finishMode: 'TAPPED' | 'AUTO',
   earnedAt: string = nowIso(),
 ): FakeSticker {
-  const reused = previousChoices(r.id, date)
-  const choices =
-    reused.length > 0
-      ? reused
-      : shuffled(designPool())
-          .slice(0, 3)
-          .map((d) => d.id)
-  const auto = choices.length === 0
-  const now = earnedAt
-  const sticker: FakeSticker = {
-    id: newId('sticker'),
-    childId: r.childId,
-    routineId: r.id,
-    chartDate: date,
-    routineName: r.name,
-    routineIconKey: r.iconKey,
-    source: 'ROUTINE',
-    status: auto ? 'AVAILABLE' : 'UNCLAIMED',
-    designId: auto ? fallbackDesign().id : null,
-    choices,
-    autoAwarded: auto,
-    prizeRequestId: null,
-    earnedAt: now,
-    claimedAt: auto ? now : null,
-    finishMode,
-  }
-  state.stickers.push(sticker)
-  return sticker
+  return earn({ kind: 'routine', routine: r, date }, finishMode, earnedAt)
+}
+
+/** Earns the chore's sticker (BR-20). `date` is the day it was finished, or the due date for an automatic finish. */
+export function earnChoreSticker(
+  chore: FakeChore,
+  date: string,
+  finishMode: 'TAPPED' | 'AUTO',
+  earnedAt: string = nowIso(),
+): FakeSticker {
+  return earn({ kind: 'chore', chore, date }, finishMode, earnedAt)
 }
 
 /** The instant a day ends: the start of the next one (TDD 7.12). */
@@ -1034,6 +1117,7 @@ function settleEndedDays(childId: number): void {
         earnSticker(r, d, 'AUTO', endOfDayIso(d))
       }
     }
+    finishDueChores(childId)
   }
   child.settledThrough = yesterday
 }
@@ -1120,20 +1204,27 @@ export function seedCompletion(taskId: number, date: string): void {
 // ---------------------------------------------------------------------------------------------
 // Sticker revocation (parent only; FR-12)
 
-/** Soft delete: the sticker row stays with status REVOKED (TDD 7.11); live reads skip it. */
-function revokeSticker(
-  routine: FakeRoutine,
-  taskId: number,
-  date: string,
-  sticker: FakeSticker,
-  note: string | null,
-): TaskToggleResult {
+interface RevokeSubject {
+  childId: number
+  chartDate: string
+  choreId: number | null
+  routineId: number | null
+  /** Names the owner in the history row: the routine's or the chore's name and icon. */
+  name: string
+  iconKey: string
+  /** `null` for a chore task: the check is cleared by the caller and the row keeps only the label (I-31). */
+  taskId: number | null
+  taskLabel: string
+  note: string | null
+}
+
+/**
+ * TDD 7.11 steps 5 and 6.2-6.5, shared by routines and chores: USED is refused before anything is written, a Pending
+ * sticker leaves its request (which is cancelled when left empty), the sticker becomes REVOKED with its choices kept
+ * (FR-12.5), and a revocation row is added. The caller clears the task's check.
+ */
+function revokeStickerCore(sticker: FakeSticker, subject: RevokeSubject) {
   if (sticker.status === 'USED') throw conflict('STICKER_USED', 'That sticker was already used for a prize')
-  const task = routine.tasks.find((t) => t.id === taskId)
-  if (!task) throw notFound('Task')
-  if (!state.completions.has(doneKey(taskId, date))) {
-    return { routine: chartRoutine(routine, date), pick: null, revoked: null }
-  }
   const design = sticker.status !== 'UNCLAIMED' && sticker.designId !== null ? designRef(sticker.designId) : null
   let requestId: number | null = null
   let cancelled = false
@@ -1155,35 +1246,60 @@ function revokeSticker(
   }
   const revocation: Revocation = {
     stickerId: sticker.id,
-    childId: routine.childId,
-    chartDate: date,
-    routineId: routine.id,
-    routineName: routine.name,
-    routineIconKey: routine.iconKey,
-    taskId,
-    taskLabel: task.label,
+    childId: subject.childId,
+    chartDate: subject.chartDate,
+    choreId: subject.choreId,
+    routineId: subject.routineId,
+    routineName: subject.name,
+    routineIconKey: subject.iconKey,
+    taskId: subject.taskId,
+    taskLabel: subject.taskLabel,
     fromStatus: sticker.status,
     design,
     prizeRequestId: requestId,
     requestCancelled: cancelled,
-    note,
+    note: subject.note,
     revokedAt: nowIso(),
   }
   state.revocations.push(revocation)
-  state.completions.delete(doneKey(taskId, date))
   sticker.status = 'REVOKED'
   sticker.prizeRequestId = null
   // the choices stay on the revoked sticker so a re-earn can offer them again (FR-12.5)
   return {
-    routine: chartRoutine(routine, date),
-    pick: null,
-    revoked: {
-      stickerId: sticker.id,
-      fromStatus: revocation.fromStatus,
-      prizeRequestId: requestId,
-      requestCancelled: cancelled,
-    },
+    stickerId: sticker.id,
+    fromStatus: revocation.fromStatus,
+    prizeRequestId: requestId,
+    requestCancelled: cancelled,
   }
+}
+
+/** Soft delete: the sticker row stays with status REVOKED (TDD 7.11); live reads skip it. */
+function revokeSticker(
+  routine: FakeRoutine,
+  taskId: number,
+  date: string,
+  sticker: FakeSticker,
+  note: string | null,
+): TaskToggleResult {
+  if (sticker.status === 'USED') throw conflict('STICKER_USED', 'That sticker was already used for a prize')
+  const task = routine.tasks.find((t) => t.id === taskId)
+  if (!task) throw notFound('Task')
+  if (!state.completions.has(doneKey(taskId, date))) {
+    return { routine: chartRoutine(routine, date), pick: null, revoked: null }
+  }
+  const revoked = revokeStickerCore(sticker, {
+    childId: routine.childId,
+    chartDate: date,
+    choreId: null,
+    routineId: routine.id,
+    name: routine.name,
+    iconKey: routine.iconKey,
+    taskId,
+    taskLabel: task.label,
+    note,
+  })
+  state.completions.delete(doneKey(taskId, date))
+  return { routine: chartRoutine(routine, date), pick: null, revoked }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1214,6 +1330,7 @@ export function getHistory(childId: number, from: string | undefined, to: string
           autoFinished: stickerForRoutineDay(r.id, d)?.finishMode === 'AUTO',
         }
       }),
+      chores: choresForDay(childId, d).map(historyChore),
       revocations: state.revocations
         .filter((r) => r.childId === childId && r.chartDate === d)
         .sort((a, b) => a.revokedAt.localeCompare(b.revokedAt) || a.stickerId - b.stickerId)
@@ -1231,6 +1348,7 @@ export function seedSticker(input: Partial<FakeSticker> & Pick<FakeSticker, 'chi
   const sticker: FakeSticker = {
     id: newId('sticker'),
     routineId: null,
+    choreId: null,
     routineName: null,
     routineIconKey: null,
     source: 'ROUTINE',
@@ -1653,4 +1771,381 @@ export function deleteCategory(categoryId: number): void {
   findCategory(categoryId)
   state.categories = state.categories.filter((c) => c.id !== categoryId)
   for (const d of state.designs) if (d.categoryId === categoryId) d.categoryId = null
+}
+
+// ---------------------------------------------------------------------------------------------
+// Chores (TDD 7.3 "Chores on the chart", 7.13)
+
+const CHORE_LIMIT = 5
+const MAX_CHORE_TASKS = 6
+const MISSED_KEEP_DAYS = 30
+
+export function seedChore(input: {
+  childId: number
+  name: string
+  iconKey: string
+  dueDate?: string | null
+  tasks: { label: string; iconKey: string; checked?: boolean }[]
+  createdAt?: string
+}): FakeChore {
+  const at = input.createdAt ?? nowIso()
+  const chore: FakeChore = {
+    id: newId('chore'),
+    childId: input.childId,
+    name: input.name,
+    iconKey: input.iconKey,
+    dueDate: input.dueDate ?? null,
+    tasks: input.tasks.map((t, i) => ({
+      id: newId('choreTask'),
+      label: t.label,
+      iconKey: t.iconKey,
+      position: i + 1,
+      checkedBy: t.checked ? 'CHILD' : null,
+      checkedAt: t.checked ? at : null,
+    })),
+    createdAt: at,
+    removed: false,
+  }
+  state.chores.push(chore)
+  return chore
+}
+
+function findChore(id: number): FakeChore {
+  const c = state.chores.find((x) => x.id === id && !x.removed)
+  if (!c) throw notFound('Chore')
+  return c
+}
+
+/** The chore of this child, or 404 (foreign, removed or unknown), plus the task, or 404. */
+function choreTaskContext(childId: number, choreId: number, taskId: number | null) {
+  findChild(childId)
+  settleEndedDays(childId)
+  const chore = state.chores.find((c) => c.id === choreId && c.childId === childId && !c.removed)
+  if (!chore) throw notFound('Chore')
+  const task = taskId === null ? null : chore.tasks.find((t) => t.id === taskId)
+  if (taskId !== null && !task) throw notFound('Task')
+  return { chore, task }
+}
+
+const liveChoreSticker = (choreId: number): FakeSticker | undefined =>
+  state.stickers.find((s) => s.choreId === choreId && s.source === 'CHORE' && s.status !== 'REVOKED')
+
+const checkedCount = (c: FakeChore) => c.tasks.filter((t) => t.checkedBy !== null).length
+
+/** TDD 7.3: the first matching row wins. Never stored. */
+function choreState(c: FakeChore): ChoreState {
+  const sticker = liveChoreSticker(c.id)
+  if (sticker) return sticker.status === 'UNCLAIMED' ? 'AWAITING_PICK' : 'EARNED'
+  if (c.dueDate !== null && c.dueDate < today()) return 'MISSED'
+  const done = checkedCount(c)
+  if (c.tasks.length > 0 && done >= c.tasks.length) return 'READY_TO_FINISH'
+  return done > 0 ? 'IN_PROGRESS' : 'NOT_STARTED'
+}
+
+const isUnfinished = (st: ChoreState) => st === 'NOT_STARTED' || st === 'IN_PROGRESS' || st === 'READY_TO_FINISH'
+
+function chartChore(c: FakeChore): ChartChore {
+  const sticker = liveChoreSticker(c.id)
+  const tasks = [...c.tasks]
+    .sort((a, b) => a.position - b.position)
+    .map((t) => ({ taskId: t.id, label: t.label, iconKey: t.iconKey, done: t.checkedBy !== null }))
+  return {
+    choreId: c.id,
+    name: c.name,
+    iconKey: c.iconKey,
+    dueDate: c.dueDate,
+    state: choreState(c),
+    doneCount: tasks.filter((t) => t.done).length,
+    taskCount: tasks.length,
+    tasks,
+    sticker: sticker ? chartSticker(sticker) : null,
+  }
+}
+
+/** The day a closed chore closed: its sticker's chart date, or the due date it was missed on. */
+function closedOn(c: FakeChore): string | null {
+  const sticker = liveChoreSticker(c.id)
+  if (sticker) return sticker.chartDate
+  return choreState(c) === 'MISSED' ? c.dueDate : null
+}
+
+function choreDto(c: FakeChore): Chore {
+  return { ...chartChore(c), childId: c.childId, closedOn: closedOn(c), createdAt: c.createdAt }
+}
+
+function historyChore(c: FakeChore): HistoryChore {
+  const view = chartChore(c)
+  const sticker = liveChoreSticker(c.id)
+  return {
+    choreId: c.id,
+    name: c.name,
+    iconKey: c.iconKey,
+    state: view.state,
+    doneCount: view.doneCount,
+    taskCount: view.taskCount,
+    stickerId: sticker ? sticker.id : null,
+    autoFinished: sticker?.finishMode === 'AUTO',
+  }
+}
+
+const byCreated = (a: FakeChore, b: FakeChore) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id
+
+/** TDD 7.3 selection and order for day `date`: oldest first, so a new chore is always last (I-27). */
+function choresForDay(childId: number, date: string): FakeChore[] {
+  const t = today()
+  return state.chores
+    .filter((c) => c.childId === childId && !c.removed)
+    .filter((c) => {
+      const sticker = liveChoreSticker(c.id)
+      if (sticker) return sticker.chartDate === date
+      const st = choreState(c)
+      if (st === 'MISSED') return c.dueDate === date
+      return date === t && isUnfinished(st)
+    })
+    .sort(byCreated)
+}
+
+/** TDD 7.12 step 5, not limited to the days being settled: past due, fully checked, no live sticker. */
+function finishDueChores(childId: number): void {
+  const t = today()
+  for (const c of state.chores) {
+    if (c.childId !== childId || c.removed || c.dueDate === null || c.dueDate >= t) continue
+    if (c.tasks.length === 0 || checkedCount(c) < c.tasks.length || liveChoreSticker(c.id)) continue
+    earnChoreSticker(c, c.dueDate, 'AUTO', endOfDayIso(c.dueDate))
+  }
+}
+
+interface ParsedChore {
+  name: string
+  iconKey: string
+  dueDate: string | null
+  tasks: { id: number | null; label: string; iconKey: string }[]
+  alreadyDone: boolean
+}
+
+function checkTaskIcon(c: Check, field: string, key: string): void {
+  if (key === '') return
+  if (!getArtwork(key)?.uses.includes('task')) c.errors.push({ field, message: 'must be a task icon' })
+}
+
+/** `ownTaskIds`: the ids of the chore being edited; on assign it is null and no task may carry an id. */
+function parseChore(body: unknown, forAssign: boolean, ownTaskIds: ReadonlySet<number> | null = null): ParsedChore {
+  const o = asObj(body)
+  const c = new Check(o)
+  const name = c.str('name', 60)
+  const iconKey = c.str('iconKey', 64)
+  checkTaskIcon(c, 'iconKey', iconKey)
+  let dueDate: string | null = null
+  if (o.dueDate !== undefined && o.dueDate !== null && o.dueDate !== '') {
+    if (typeof o.dueDate !== 'string' || !parseLocalDate(o.dueDate)) {
+      c.errors.push({ field: 'dueDate', message: 'must be a date (YYYY-MM-DD)' })
+    } else if (o.dueDate < today()) {
+      c.errors.push({ field: 'dueDate', message: 'must be today or later' })
+    } else {
+      dueDate = o.dueDate
+    }
+  }
+  if (o.alreadyDone !== undefined && typeof o.alreadyDone !== 'boolean') {
+    c.errors.push({ field: 'alreadyDone', message: 'must be true or false' })
+  }
+  const alreadyDone = o.alreadyDone === true
+  if (alreadyDone && !forAssign) c.errors.push({ field: 'alreadyDone', message: 'can only be used when assigning' })
+  if (alreadyDone && dueDate !== null) c.errors.push({ field: 'dueDate', message: 'must be empty for a chore that is already done' })
+  const tasks: ParsedChore['tasks'] = []
+  if (!Array.isArray(o.tasks) || o.tasks.length < 1 || o.tasks.length > MAX_CHORE_TASKS) {
+    c.errors.push({ field: 'tasks', message: `must be a list of 1-${MAX_CHORE_TASKS} tasks` })
+  } else {
+    o.tasks.forEach((raw: unknown, i) => {
+      const t = typeof raw === 'object' && raw !== null ? (raw as Obj) : {}
+      const tc = new Check(t)
+      const label = tc.str('label', 60)
+      const icon = tc.str('iconKey', 64)
+      checkTaskIcon(tc, 'iconKey', icon)
+      for (const e of tc.errors) c.errors.push({ field: `tasks[${i}].${e.field}`, message: e.message })
+      const id = typeof t.id === 'number' ? t.id : null
+      if (t.id !== undefined && t.id !== null && (id === null || ownTaskIds === null || !ownTaskIds.has(id))) {
+        c.errors.push({ field: `tasks[${i}].id`, message: 'Not a task of this chore' })
+      }
+      tasks.push({ id, label, iconKey: icon })
+    })
+  }
+  c.done()
+  return { name, iconKey, dueDate, tasks, alreadyDone }
+}
+
+function requireRoom(childId: number): void {
+  const unfinished = state.chores.filter((c) => c.childId === childId && !c.removed && isUnfinished(choreState(c)))
+  if (unfinished.length >= CHORE_LIMIT) {
+    throw conflict('CHORE_LIMIT_REACHED', `There are already ${CHORE_LIMIT} chores to do`)
+  }
+}
+
+export function assignChore(childId: number, body: unknown): Chore {
+  findChild(childId)
+  settleEndedDays(childId)
+  const p = parseChore(body, true)
+  // A chore assigned as done is never unfinished, so the limit does not apply (I-39).
+  if (!p.alreadyDone) requireRoom(childId)
+  const chore = seedChore({ childId, name: p.name, iconKey: p.iconKey, dueDate: p.dueDate, tasks: p.tasks })
+  if (p.alreadyDone) {
+    const at = nowIso()
+    for (const t of chore.tasks) {
+      t.checkedBy = 'PARENT'
+      t.checkedAt = at
+    }
+    earnChoreSticker(chore, today(), 'TAPPED')
+  }
+  return choreDto(chore)
+}
+
+export function saveChore(choreId: number, body: unknown): Chore {
+  const chore = findChore(choreId)
+  settleEndedDays(chore.childId)
+  if (liveChoreSticker(chore.id)) throw conflict('CHORE_LOCKED', 'This chore is already finished')
+  const p = parseChore(body, false, new Set(chore.tasks.map((t) => t.id)))
+  // A past due date is never accepted, so saving a Missed chore always reopens it, and the limit applies (BR-25).
+  if (choreState(chore) === 'MISSED') requireRoom(chore.childId)
+  const existing = new Map(chore.tasks.map((t) => [t.id, t]))
+  chore.tasks = p.tasks.map((t, i) => {
+    const prev = t.id !== null ? existing.get(t.id) : undefined
+    return {
+      id: prev ? prev.id : newId('choreTask'),
+      label: t.label,
+      iconKey: t.iconKey,
+      position: i + 1,
+      checkedBy: prev ? prev.checkedBy : null,
+      checkedAt: prev ? prev.checkedAt : null,
+    }
+  })
+  Object.assign(chore, { name: p.name, iconKey: p.iconKey, dueDate: p.dueDate })
+  // Saving never earns a sticker (BR-21).
+  return choreDto(chore)
+}
+
+export function removeChoreById(choreId: number): void {
+  const chore = state.chores.find((c) => c.id === choreId)
+  if (!chore) throw notFound('Chore')
+  if (chore.removed) return
+  settleEndedDays(chore.childId)
+  if (liveChoreSticker(chore.id)) throw conflict('CHORE_LOCKED', 'This chore is already finished')
+  chore.removed = true
+}
+
+export function listChores(query: { filter?: string | null; childId?: number | null; cursor?: string | null }): ChorePage {
+  const filter = query.filter ?? null
+  if (filter !== 'active' && filter !== 'closed') {
+    throw invalid([{ field: 'filter', message: 'must be active or closed' }])
+  }
+  const children = [...state.children].sort((a, b) => a.position - b.position)
+  if (query.childId !== null && query.childId !== undefined) findChild(query.childId)
+  const covered = children.filter((c) => query.childId === null || query.childId === undefined || c.id === query.childId)
+  for (const c of covered) settleEndedDays(c.id)
+  const ids = covered.map((c) => c.id)
+  const mine = state.chores.filter((c) => !c.removed && ids.includes(c.childId))
+  if (filter === 'active') {
+    const items = ids.flatMap((id) =>
+      mine
+        .filter((c) => c.childId === id && isUnfinished(choreState(c)))
+        .sort(byCreated)
+        .map(choreDto),
+    )
+    return { items, nextCursor: null }
+  }
+  const oldest = addDays(today(), -MISSED_KEEP_DAYS)
+  const closed = mine
+    .map((c) => ({ c, on: closedOn(c) }))
+    .filter((x): x is { c: FakeChore; on: string } => x.on !== null)
+    .filter((x) => choreState(x.c) !== 'MISSED' || x.on >= oldest)
+    .sort((a, b) => b.on.localeCompare(a.on) || b.c.id - a.c.id)
+  const page = paginate(closed, query.cursor, 50)
+  return { items: page.items.map((x) => choreDto(x.c)), nextCursor: page.nextCursor }
+}
+
+/** Up to 12 of the family's most recently assigned chores, one per distinct name, removed ones included. */
+export function recentChores(): ChoreSuggestion[] {
+  const seen = new Set<string>()
+  const out: ChoreSuggestion[] = []
+  for (const c of [...state.chores].sort((a, b) => byCreated(b, a))) {
+    const key = c.name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({
+      name: c.name,
+      iconKey: c.iconKey,
+      tasks: [...c.tasks].sort((a, b) => a.position - b.position).map((t) => ({ label: t.label, iconKey: t.iconKey })),
+    })
+    if (out.length >= 12) break
+  }
+  return out
+}
+
+const choreResult = (c: FakeChore, pick: StickerPick | null = null, revoked: ChoreResult['revoked'] = null): ChoreResult => ({
+  chore: chartChore(c),
+  pick,
+  revoked,
+})
+
+export function checkChoreTask(childId: number, choreId: number, taskId: number): ChoreResult {
+  const { chore, task } = choreTaskContext(childId, choreId, taskId)
+  if (!task) throw notFound('Task')
+  if (liveChoreSticker(chore.id)) return choreResult(chore) // locked: state unchanged (BR-22)
+  if (choreState(chore) === 'MISSED') throw conflict('CHORE_MISSED', 'The time for this chore is over')
+  if (task.checkedBy === null) {
+    task.checkedBy = sessionActor()
+    task.checkedAt = nowIso()
+  }
+  // Nothing is earned here (BR-21).
+  return choreResult(chore)
+}
+
+export function uncheckChoreTask(
+  childId: number,
+  choreId: number,
+  taskId: number,
+  opts: { revokeSticker?: boolean; removeChore?: boolean; note?: string | null } = {},
+): ChoreResult {
+  const { chore, task } = choreTaskContext(childId, choreId, taskId)
+  if (!task) throw notFound('Task')
+  const sticker = liveChoreSticker(chore.id)
+  if (!sticker) {
+    // A plain undo, never refused for a missed chore.
+    task.checkedBy = null
+    task.checkedAt = null
+    return choreResult(chore)
+  }
+  if (!state.parentSession) throw conflict('CHORE_LOCKED', 'This chore is already finished')
+  if (!opts.revokeSticker) {
+    throw conflict('REVOKE_CONFIRMATION_REQUIRED', 'Confirm to remove this sticker', { sticker: chartSticker(sticker) })
+  }
+  const revoked = revokeStickerCore(sticker, {
+    childId,
+    chartDate: sticker.chartDate,
+    choreId: chore.id,
+    routineId: null,
+    name: chore.name,
+    iconKey: chore.iconKey,
+    taskId: null,
+    taskLabel: task.label,
+    note: opts.note ?? null,
+  })
+  task.checkedBy = null
+  task.checkedAt = null
+  if (opts.removeChore) {
+    chore.removed = true
+    return { chore: null, pick: null, revoked }
+  }
+  return choreResult(chore, null, revoked)
+}
+
+/** I'm Done! for a chore (FR-13.16). Idempotent. */
+export function finishChore(childId: number, choreId: number): ChoreResult {
+  const { chore } = choreTaskContext(childId, choreId, null)
+  const existing = liveChoreSticker(chore.id)
+  if (existing) return choreResult(chore, existing.status === 'UNCLAIMED' ? pickDto(existing) : null)
+  if (choreState(chore) === 'MISSED') throw conflict('CHORE_MISSED', 'The time for this chore is over')
+  if (checkedCount(chore) < chore.tasks.length) {
+    throw conflict('CHORE_NOT_READY', 'Some tasks in this chore are not done yet')
+  }
+  const sticker = earnChoreSticker(chore, today(), 'TAPPED')
+  return choreResult(chore, pickDto(sticker))
 }

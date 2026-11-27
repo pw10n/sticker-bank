@@ -21,6 +21,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/children/{childId}/chores/{choreId}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * I'm Done!: finish a chore whose tasks are all checked and earn its sticker
+         * @description State-changing request: requires header `X-Sticker-Bank: 1`.
+         */
+        post: operations["finishChore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/children/{childId}/chores/{choreId}/tasks/{taskId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Check a chore's task
+         * @description State-changing request: requires header `X-Sticker-Bank: 1`.
+         */
+        put: operations["checkChoreTask"];
+        post?: never;
+        /**
+         * Uncheck a chore's task, or revoke its sticker (parent, revokeSticker=true)
+         * @description State-changing request: requires header `X-Sticker-Bank: 1`.
+         */
+        delete: operations["undoChoreTask"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/children/{childId}/days/{date}": {
         parameters: {
             query?: never;
@@ -181,6 +225,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/parent/children/{childId}/chores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assign a chore to a child
+         * @description State-changing request: requires header `X-Sticker-Bank: 1`.
+         */
+        post: operations["assignChore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/parent/children/{childId}/history": {
         parameters: {
             query?: never;
@@ -234,6 +298,64 @@ export interface paths {
         put: operations["reorderRoutines"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/parent/chores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the family's chores: active, or closed in pages */
+        get: operations["listChores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/parent/chores/recent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recently assigned chores, to fill in the form */
+        get: operations["getRecentChores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/parent/chores/{choreId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save a chore's whole definition (edit, or reopen a missed chore)
+         * @description State-changing request: requires header `X-Sticker-Bank: 1`.
+         */
+        put: operations["saveChore"];
+        post?: never;
+        /**
+         * Remove a chore that has no sticker
+         * @description State-changing request: requires header `X-Sticker-Bank: 1`.
+         */
+        delete: operations["removeChore"];
         options?: never;
         head?: never;
         patch?: never;
@@ -678,6 +800,21 @@ export interface components {
             enabled?: boolean;
             name: string;
         };
+        ChartChoreDto: {
+            /** Format: int64 */
+            choreId: number;
+            /** Format: int32 */
+            doneCount: number;
+            /** Format: date */
+            dueDate: string | null;
+            iconKey: string;
+            name: string;
+            state: components["schemas"]["ChoreState"];
+            sticker: components["schemas"]["ChartStickerDto"] | null;
+            /** Format: int32 */
+            taskCount: number;
+            tasks: components["schemas"]["ChartTaskDto"][];
+        };
         ChartRoutineDto: {
             color: string | null;
             /** Format: int32 */
@@ -734,9 +871,65 @@ export interface components {
             position: number;
             themeColor: string;
         };
+        ChoreDto: {
+            /** Format: int64 */
+            childId: number;
+            /** Format: int64 */
+            choreId: number;
+            /** Format: date */
+            closedOn: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int32 */
+            doneCount: number;
+            /** Format: date */
+            dueDate: string | null;
+            iconKey: string;
+            name: string;
+            state: components["schemas"]["ChoreState"];
+            sticker: components["schemas"]["ChartStickerDto"] | null;
+            /** Format: int32 */
+            taskCount: number;
+            tasks: components["schemas"]["ChartTaskDto"][];
+        };
+        ChoreInput: {
+            alreadyDone?: boolean;
+            /** Format: date */
+            dueDate?: string | null;
+            iconKey: string;
+            name: string;
+            tasks: components["schemas"]["ChoreTaskInput"][];
+        };
+        ChorePageDto: {
+            items: components["schemas"]["ChoreDto"][];
+            nextCursor: string | null;
+        };
+        ChoreResultDto: {
+            chore: components["schemas"]["ChartChoreDto"] | null;
+            pick: components["schemas"]["StickerPickDto"] | null;
+            revoked: components["schemas"]["RevokedStickerDto"] | null;
+        };
+        /** @enum {string} */
+        ChoreState: "NOT_STARTED" | "IN_PROGRESS" | "READY_TO_FINISH" | "AWAITING_PICK" | "EARNED" | "MISSED";
+        ChoreSuggestionDto: {
+            iconKey: string;
+            name: string;
+            tasks: components["schemas"]["ChoreSuggestionTaskDto"][];
+        };
+        ChoreSuggestionTaskDto: {
+            iconKey: string;
+            label: string;
+        };
+        ChoreTaskInput: {
+            iconKey: string;
+            /** Format: int64 */
+            id?: number | null;
+            label: string;
+        };
         DailyChartDto: {
             /** Format: int64 */
             childId: number;
+            chores: components["schemas"]["ChartChoreDto"][];
             /** Format: date */
             date: string;
             isToday: boolean;
@@ -774,12 +967,27 @@ export interface components {
             status: components["schemas"]["DesignStatus"];
         };
         /** @enum {string} */
-        ErrorCode: "VALIDATION_FAILED" | "PARENT_SESSION_REQUIRED" | "PIN_INCORRECT" | "PIN_LOCKED" | "PIN_NOT_SET" | "PIN_ALREADY_SET" | "DAY_CHANGED" | "FUTURE_DATE" | "ROUTINE_NOT_SCHEDULED" | "ROUTINE_NOT_READY" | "ROUTINE_LOCKED" | "ALREADY_CLAIMED" | "CHOICE_NOT_OFFERED" | "PENDING_REQUEST_EXISTS" | "STICKER_NOT_AVAILABLE" | "REQUEST_NOT_PENDING" | "REQUEST_NOT_COMPLETED" | "DESIGN_IN_USE" | "STICKER_USED" | "REVOKE_CONFIRMATION_REQUIRED" | "STICKER_REVOKED" | "NOT_FOUND" | "CSRF_HEADER_MISSING";
+        ErrorCode: "VALIDATION_FAILED" | "PARENT_SESSION_REQUIRED" | "PIN_INCORRECT" | "PIN_LOCKED" | "PIN_NOT_SET" | "PIN_ALREADY_SET" | "DAY_CHANGED" | "FUTURE_DATE" | "ROUTINE_NOT_SCHEDULED" | "ROUTINE_NOT_READY" | "ROUTINE_LOCKED" | "ALREADY_CLAIMED" | "CHOICE_NOT_OFFERED" | "PENDING_REQUEST_EXISTS" | "STICKER_NOT_AVAILABLE" | "REQUEST_NOT_PENDING" | "REQUEST_NOT_COMPLETED" | "DESIGN_IN_USE" | "STICKER_USED" | "REVOKE_CONFIRMATION_REQUIRED" | "STICKER_REVOKED" | "CHORE_NOT_READY" | "CHORE_MISSED" | "CHORE_LOCKED" | "CHORE_LIMIT_REACHED" | "NOT_FOUND" | "CSRF_HEADER_MISSING";
         FieldErrorDto: {
             field: string;
             message: string;
         };
+        HistoryChoreDto: {
+            autoFinished: boolean;
+            /** Format: int64 */
+            choreId: number;
+            /** Format: int32 */
+            doneCount: number;
+            iconKey: string;
+            name: string;
+            state: components["schemas"]["ChoreState"];
+            /** Format: int64 */
+            stickerId: number | null;
+            /** Format: int32 */
+            taskCount: number;
+        };
         HistoryDayDto: {
+            chores: components["schemas"]["HistoryChoreDto"][];
             /** Format: date */
             date: string;
             revocations: components["schemas"]["RevocationDto"][];
@@ -915,6 +1123,8 @@ export interface components {
             chartDate: string;
             /** Format: int64 */
             childId: number;
+            /** Format: int64 */
+            choreId: number | null;
             design: components["schemas"]["DesignRefDto"] | null;
             fromStatus: components["schemas"]["StickerStatus"];
             note: string | null;
@@ -1060,7 +1270,7 @@ export interface components {
             prizeText: string;
         };
         /** @enum {string} */
-        StickerSource: "ROUTINE" | "BONUS";
+        StickerSource: "ROUTINE" | "BONUS" | "CHORE";
         /** @enum {string} */
         StickerStatus: "UNCLAIMED" | "AVAILABLE" | "PENDING" | "USED" | "REVOKED";
         TaskDto: {
@@ -1186,6 +1396,96 @@ export interface operations {
                     "application/json": components["schemas"]["BootstrapDto"];
                 };
             };
+        };
+    };
+    finishChore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                childId: number;
+                choreId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoreResultDto"];
+                };
+            };
+            403: components["responses"]["Problem403"];
+            404: components["responses"]["Problem404"];
+            409: components["responses"]["Problem409"];
+        };
+    };
+    checkChoreTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                childId: number;
+                choreId: number;
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoreResultDto"];
+                };
+            };
+            403: components["responses"]["Problem403"];
+            404: components["responses"]["Problem404"];
+            409: components["responses"]["Problem409"];
+        };
+    };
+    undoChoreTask: {
+        parameters: {
+            query?: {
+                /** @description Parent only. true revokes the chore's earned sticker (TDD 7.13); without it a finished chore answers 409 REVOKE_CONFIRMATION_REQUIRED */
+                revokeSticker?: boolean;
+                /** @description Parent only, with revokeSticker=true: also removes the chore; the response then has chore = null */
+                removeChore?: boolean;
+            };
+            header?: never;
+            path: {
+                childId: number;
+                choreId: number;
+                taskId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RevokeStickerRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoreResultDto"];
+                };
+            };
+            400: components["responses"]["Problem400"];
+            403: components["responses"]["Problem403"];
+            404: components["responses"]["Problem404"];
+            409: components["responses"]["Problem409"];
         };
     };
     getDailyChart: {
@@ -1491,6 +1791,37 @@ export interface operations {
             404: components["responses"]["Problem404"];
         };
     };
+    assignChore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                childId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChoreInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoreDto"];
+                };
+            };
+            400: components["responses"]["Problem400"];
+            401: components["responses"]["Problem401"];
+            403: components["responses"]["Problem403"];
+            404: components["responses"]["Problem404"];
+            409: components["responses"]["Problem409"];
+        };
+    };
     getHistory: {
         parameters: {
             query: {
@@ -1599,6 +1930,110 @@ export interface operations {
             401: components["responses"]["Problem401"];
             403: components["responses"]["Problem403"];
             404: components["responses"]["Problem404"];
+        };
+    };
+    listChores: {
+        parameters: {
+            query: {
+                /** @description active: every unfinished chore, unpaged. closed: finished, and missed in the last 30 days, in pages */
+                filter: "active" | "closed";
+                childId?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChorePageDto"];
+                };
+            };
+            400: components["responses"]["Problem400"];
+            401: components["responses"]["Problem401"];
+            404: components["responses"]["Problem404"];
+        };
+    };
+    getRecentChores: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoreSuggestionDto"][];
+                };
+            };
+            401: components["responses"]["Problem401"];
+        };
+    };
+    saveChore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                choreId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChoreInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoreDto"];
+                };
+            };
+            400: components["responses"]["Problem400"];
+            401: components["responses"]["Problem401"];
+            403: components["responses"]["Problem403"];
+            404: components["responses"]["Problem404"];
+            409: components["responses"]["Problem409"];
+        };
+    };
+    removeChore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                choreId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem401"];
+            403: components["responses"]["Problem403"];
+            404: components["responses"]["Problem404"];
+            409: components["responses"]["Problem409"];
         };
     };
     listCategories: {

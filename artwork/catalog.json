@@ -1360,5 +1360,177 @@
     ],
     "category": null,
     "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f3eb.webp"
+  },
+  {
+    "key": "fork-and-knife-with-plate",
+    "name": "Fork and Knife with Plate",
+    "emoji": "🍽️",
+    "tags": [
+      "dishes",
+      "meal"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f37d-fe0f.webp"
+  },
+  {
+    "key": "wastebasket",
+    "name": "Wastebasket",
+    "emoji": "🗑️",
+    "tags": [
+      "trash"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f5d1-fe0f.webp"
+  },
+  {
+    "key": "dog",
+    "name": "Dog",
+    "emoji": "🐕",
+    "tags": [
+      "pet"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f415.webp"
+  },
+  {
+    "key": "cat",
+    "name": "Cat",
+    "emoji": "🐈",
+    "tags": [
+      "pet"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f408.webp"
+  },
+  {
+    "key": "fish",
+    "name": "Fish",
+    "emoji": "🐟",
+    "tags": [
+      "pet"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f41f.webp"
+  },
+  {
+    "key": "seedling",
+    "name": "Seedling",
+    "emoji": "🌱",
+    "tags": [
+      "garden"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f331.webp"
+  },
+  {
+    "key": "fallen-leaf",
+    "name": "Fallen Leaf",
+    "emoji": "🍂",
+    "tags": [
+      "rake",
+      "garden"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f342.webp"
+  },
+  {
+    "key": "bucket",
+    "name": "Bucket",
+    "emoji": "🪣",
+    "tags": [
+      "mop",
+      "wash"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1faa3.webp"
+  },
+  {
+    "key": "shopping-cart",
+    "name": "Shopping Cart",
+    "emoji": "🛒",
+    "tags": [
+      "shop"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f6d2.webp"
+  },
+  {
+    "key": "package",
+    "name": "Package",
+    "emoji": "📦",
+    "tags": [
+      "pack"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f4e6.webp"
+  },
+  {
+    "key": "books",
+    "name": "Books",
+    "emoji": "📚",
+    "tags": [
+      "tidy",
+      "read"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f4da.webp"
+  },
+  {
+    "key": "mailbox",
+    "name": "Mailbox",
+    "emoji": "📬",
+    "tags": [
+      "mail"
+    ],
+    "uses": [
+      "task",
+      "routine"
+    ],
+    "category": null,
+    "source": "node_modules/@lobehub/fluent-emoji-3d/assets/1f4ec.webp"
   }
 ]

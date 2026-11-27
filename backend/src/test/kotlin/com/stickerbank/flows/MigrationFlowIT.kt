@@ -7,11 +7,11 @@ import org.junit.jupiter.api.Test
 @IntegrationTest
 class MigrationFlowIT : FlowTestBase() {
     @Test
-    fun `flyway applied V1 to V5 on an empty MySQL`() {
+    fun `flyway applied V1 to V6 on an empty MySQL`() {
         val versions =
             jdbc.sql("SELECT version FROM flyway_schema_history WHERE success = TRUE AND version IS NOT NULL ORDER BY installed_rank")
                 .query(String::class.java).list()
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5")
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6")
     }
 
     @Test
@@ -24,6 +24,44 @@ class MigrationFlowIT : FlowTestBase() {
         assertThat(columns("child")).contains("settled_through")
         // a SELECT * view is expanded when created, so V5 has to redefine it (TDD 6.8)
         assertThat(columns("live_sticker")).contains("finish_mode")
+    }
+
+    @Test
+    fun `V6 adds the chore tables, the sticker's chore_id with its live key, and the live view exposes it`() {
+        val columns = { table: String ->
+            jdbc.sql("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?")
+                .param(table).query(String::class.java).list()
+        }
+        assertThat(columns("chore"))
+            .containsExactlyInAnyOrder("id", "child_id", "name", "icon_key", "due_date", "created_at", "updated_at", "removed_at")
+        assertThat(columns("chore_task"))
+            .containsExactlyInAnyOrder("id", "chore_id", "position", "label", "icon_key", "checked_at", "checked_by")
+        assertThat(columns("sticker")).contains("chore_id")
+        // as in V5, the view has to be redefined before it shows the new column (TDD 6.9)
+        assertThat(columns("live_sticker")).contains("chore_id")
+
+        // BR-20: one live sticker per chore, the same shape as the routine key
+        val keyColumns = { index: String ->
+            jdbc.sql(
+                "SELECT column_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'sticker' " +
+                    "AND index_name = ? AND non_unique = 0 ORDER BY seq_in_index",
+            ).param(index).query(String::class.java).list()
+        }
+        assertThat(keyColumns("uq_sticker_live_chore")).containsExactly("chore_id", "is_live")
+        assertThat(keyColumns("uq_sticker_live_routine_day")).containsExactly("routine_id", "chart_date", "is_live")
+
+        val sourceType =
+            jdbc.sql(
+                "SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'sticker' " +
+                    "AND column_name = 'source'",
+            ).query(String::class.java).single()
+        assertThat(sourceType).isEqualTo("enum('ROUTINE','BONUS','CHORE')")
+        val choreForeignKey =
+            jdbc.sql(
+                "SELECT delete_rule FROM information_schema.referential_constraints WHERE constraint_schema = DATABASE() " +
+                    "AND constraint_name = 'fk_sticker_chore'",
+            ).query(String::class.java).single()
+        assertThat(choreForeignKey).isEqualTo("CASCADE")
     }
 
     @Test

@@ -117,10 +117,27 @@ export default function HistoryScreen() {
                             )}
                           </li>
                         ))}
+                        {(day?.chores ?? []).map((c) => (
+                          <li
+                            key={`chore-${c.choreId}`}
+                            data-testid={`day-chore-${c.choreId}`}
+                            className="flex min-w-0 flex-col items-start gap-1"
+                          >
+                            <span className="max-w-full break-words text-sm font-semibold">{c.name}</span>
+                            <StateBadge state={c.state} doneCount={c.doneCount} taskCount={c.taskCount} />
+                            {c.autoFinished && (
+                              <span data-testid="auto-finished-mark" className="max-w-full break-words text-xs font-semibold">
+                                <span aria-hidden="true">⏰ </span>Finished automatically
+                              </span>
+                            )}
+                          </li>
+                        ))}
                         {(day?.revocations ?? []).length > 0 && (
                           <li className="text-sm font-semibold">↩ {day?.revocations.length} removed</li>
                         )}
-                        {(day?.routines ?? []).length === 0 && <li className="text-sm">No routines</li>}
+                        {(day?.routines ?? []).length === 0 && (day?.chores ?? []).length === 0 && (
+                          <li className="text-sm">No routines</li>
+                        )}
                       </ul>
                     )}
                   </Card>

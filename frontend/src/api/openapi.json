@@ -205,6 +205,51 @@
         "required" : [ "name" ],
         "type" : "object"
       },
+      "ChartChoreDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "choreId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "doneCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "dueDate" : {
+            "format" : "date",
+            "type" : [ "string", "null" ]
+          },
+          "iconKey" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "state" : {
+            "$ref" : "#/components/schemas/ChoreState"
+          },
+          "sticker" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ChartStickerDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "taskCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tasks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChartTaskDto"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "choreId", "doneCount", "dueDate", "iconKey", "name", "state", "sticker", "taskCount", "tasks" ],
+        "type" : "object"
+      },
       "ChartRoutineDto" : {
         "additionalProperties" : false,
         "properties" : {
@@ -372,12 +417,206 @@
         "required" : [ "avatarKey", "id", "name", "position", "themeColor" ],
         "type" : "object"
       },
+      "ChoreDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "childId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "choreId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "closedOn" : {
+            "format" : "date",
+            "type" : [ "string", "null" ]
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "doneCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "dueDate" : {
+            "format" : "date",
+            "type" : [ "string", "null" ]
+          },
+          "iconKey" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "state" : {
+            "$ref" : "#/components/schemas/ChoreState"
+          },
+          "sticker" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ChartStickerDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "taskCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tasks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChartTaskDto"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "childId", "choreId", "closedOn", "createdAt", "doneCount", "dueDate", "iconKey", "name", "state", "sticker", "taskCount", "tasks" ],
+        "type" : "object"
+      },
+      "ChoreInput" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "alreadyDone" : {
+            "type" : "boolean"
+          },
+          "dueDate" : {
+            "format" : "date",
+            "type" : [ "string", "null" ]
+          },
+          "iconKey" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "name" : {
+            "maxLength" : 60,
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "tasks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChoreTaskInput"
+            },
+            "maxItems" : 6,
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "iconKey", "name", "tasks" ],
+        "type" : "object"
+      },
+      "ChorePageDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChoreDto"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "items", "nextCursor" ],
+        "type" : "object"
+      },
+      "ChoreResultDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "chore" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ChartChoreDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "pick" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/StickerPickDto"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "revoked" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/RevokedStickerDto"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "chore", "pick", "revoked" ],
+        "type" : "object"
+      },
+      "ChoreState" : {
+        "enum" : [ "NOT_STARTED", "IN_PROGRESS", "READY_TO_FINISH", "AWAITING_PICK", "EARNED", "MISSED" ],
+        "type" : "string"
+      },
+      "ChoreSuggestionDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "iconKey" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "tasks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChoreSuggestionTaskDto"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "iconKey", "name", "tasks" ],
+        "type" : "object"
+      },
+      "ChoreSuggestionTaskDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "iconKey" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "iconKey", "label" ],
+        "type" : "object"
+      },
+      "ChoreTaskInput" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "iconKey" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
+          "label" : {
+            "maxLength" : 60,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "iconKey", "label" ],
+        "type" : "object"
+      },
       "DailyChartDto" : {
         "additionalProperties" : false,
         "properties" : {
           "childId" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "chores" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChartChoreDto"
+            },
+            "type" : "array"
           },
           "date" : {
             "format" : "date",
@@ -399,7 +638,7 @@
             "type" : "array"
           }
         },
-        "required" : [ "childId", "date", "isToday", "routines", "unclaimedFromEarlierDays" ],
+        "required" : [ "childId", "chores", "date", "isToday", "routines", "unclaimedFromEarlierDays" ],
         "type" : "object"
       },
       "DesignDto" : {
@@ -488,7 +727,7 @@
         "type" : "object"
       },
       "ErrorCode" : {
-        "enum" : [ "VALIDATION_FAILED", "PARENT_SESSION_REQUIRED", "PIN_INCORRECT", "PIN_LOCKED", "PIN_NOT_SET", "PIN_ALREADY_SET", "DAY_CHANGED", "FUTURE_DATE", "ROUTINE_NOT_SCHEDULED", "ROUTINE_NOT_READY", "ROUTINE_LOCKED", "ALREADY_CLAIMED", "CHOICE_NOT_OFFERED", "PENDING_REQUEST_EXISTS", "STICKER_NOT_AVAILABLE", "REQUEST_NOT_PENDING", "REQUEST_NOT_COMPLETED", "DESIGN_IN_USE", "STICKER_USED", "REVOKE_CONFIRMATION_REQUIRED", "STICKER_REVOKED", "NOT_FOUND", "CSRF_HEADER_MISSING" ],
+        "enum" : [ "VALIDATION_FAILED", "PARENT_SESSION_REQUIRED", "PIN_INCORRECT", "PIN_LOCKED", "PIN_NOT_SET", "PIN_ALREADY_SET", "DAY_CHANGED", "FUTURE_DATE", "ROUTINE_NOT_SCHEDULED", "ROUTINE_NOT_READY", "ROUTINE_LOCKED", "ALREADY_CLAIMED", "CHOICE_NOT_OFFERED", "PENDING_REQUEST_EXISTS", "STICKER_NOT_AVAILABLE", "REQUEST_NOT_PENDING", "REQUEST_NOT_COMPLETED", "DESIGN_IN_USE", "STICKER_USED", "REVOKE_CONFIRMATION_REQUIRED", "STICKER_REVOKED", "CHORE_NOT_READY", "CHORE_MISSED", "CHORE_LOCKED", "CHORE_LIMIT_REACHED", "NOT_FOUND", "CSRF_HEADER_MISSING" ],
         "type" : "string"
       },
       "FieldErrorDto" : {
@@ -504,9 +743,50 @@
         "required" : [ "field", "message" ],
         "type" : "object"
       },
+      "HistoryChoreDto" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "autoFinished" : {
+            "type" : "boolean"
+          },
+          "choreId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "doneCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "iconKey" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "state" : {
+            "$ref" : "#/components/schemas/ChoreState"
+          },
+          "stickerId" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
+          "taskCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "autoFinished", "choreId", "doneCount", "iconKey", "name", "state", "stickerId", "taskCount" ],
+        "type" : "object"
+      },
       "HistoryDayDto" : {
         "additionalProperties" : false,
         "properties" : {
+          "chores" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HistoryChoreDto"
+            },
+            "type" : "array"
+          },
           "date" : {
             "format" : "date",
             "type" : "string"
@@ -524,7 +804,7 @@
             "type" : "array"
           }
         },
-        "required" : [ "date", "revocations", "routines" ],
+        "required" : [ "chores", "date", "revocations", "routines" ],
         "type" : "object"
       },
       "HistoryDto" : {
@@ -915,6 +1195,10 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "choreId" : {
+            "format" : "int64",
+            "type" : [ "integer", "null" ]
+          },
           "design" : {
             "oneOf" : [ {
               "$ref" : "#/components/schemas/DesignRefDto"
@@ -961,7 +1245,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "chartDate", "childId", "design", "fromStatus", "note", "prizeRequestId", "requestCancelled", "revokedAt", "routineIconKey", "routineId", "routineName", "stickerId", "taskId", "taskLabel" ],
+        "required" : [ "chartDate", "childId", "choreId", "design", "fromStatus", "note", "prizeRequestId", "requestCancelled", "revokedAt", "routineIconKey", "routineId", "routineName", "stickerId", "taskId", "taskLabel" ],
         "type" : "object"
       },
       "RevokeStickerRequest" : {
@@ -1351,7 +1635,7 @@
         "type" : "object"
       },
       "StickerSource" : {
-        "enum" : [ "ROUTINE", "BONUS" ],
+        "enum" : [ "ROUTINE", "BONUS", "CHORE" ],
         "type" : "string"
       },
       "StickerStatus" : {
@@ -1492,6 +1776,188 @@
         },
         "summary" : "App bootstrap state",
         "tags" : [ "family" ]
+      }
+    },
+    "/api/children/{childId}/chores/{choreId}/finish" : {
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "finishChore",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "path",
+          "name" : "choreId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChoreResultDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "summary" : "I'm Done!: finish a chore whose tasks are all checked and earn its sticker",
+        "tags" : [ "chore" ]
+      }
+    },
+    "/api/children/{childId}/chores/{choreId}/tasks/{taskId}" : {
+      "delete" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "undoChoreTask",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "path",
+          "name" : "choreId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "path",
+          "name" : "taskId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "description" : "Parent only. true revokes the chore's earned sticker (TDD 7.13); without it a finished chore answers 409 REVOKE_CONFIRMATION_REQUIRED",
+          "in" : "query",
+          "name" : "revokeSticker",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "description" : "Parent only, with revokeSticker=true: also removes the chore; the response then has chore = null",
+          "in" : "query",
+          "name" : "removeChore",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RevokeStickerRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChoreResultDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "summary" : "Uncheck a chore's task, or revoke its sticker (parent, revokeSticker=true)",
+        "tags" : [ "chore" ]
+      },
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "checkChoreTask",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "path",
+          "name" : "choreId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "path",
+          "name" : "taskId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChoreResultDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "summary" : "Check a chore's task",
+        "tags" : [ "chore" ]
       }
     },
     "/api/children/{childId}/days/{date}" : {
@@ -2026,6 +2492,63 @@
         "tags" : [ "child" ]
       }
     },
+    "/api/parent/children/{childId}/chores" : {
+      "post" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "assignChore",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "childId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChoreInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChoreDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Assign a chore to a child",
+        "tags" : [ "chore" ]
+      }
+    },
     "/api/parent/children/{childId}/history" : {
       "get" : {
         "operationId" : "getHistory",
@@ -2219,6 +2742,182 @@
         } ],
         "summary" : "Reorder a child's routines",
         "tags" : [ "routine" ]
+      }
+    },
+    "/api/parent/chores" : {
+      "get" : {
+        "operationId" : "listChores",
+        "parameters" : [ {
+          "description" : "active: every unfinished chore, unpaged. closed: finished, and missed in the last 30 days, in pages",
+          "in" : "query",
+          "name" : "filter",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "active", "closed" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "childId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChorePageDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "List the family's chores: active, or closed in pages",
+        "tags" : [ "chore" ]
+      }
+    },
+    "/api/parent/chores/recent" : {
+      "get" : {
+        "operationId" : "getRecentChores",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ChoreSuggestionDto"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Recently assigned chores, to fill in the form",
+        "tags" : [ "chore" ]
+      }
+    },
+    "/api/parent/chores/{choreId}" : {
+      "delete" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "removeChore",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "choreId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No content"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Remove a chore that has no sticker",
+        "tags" : [ "chore" ]
+      },
+      "put" : {
+        "description" : "State-changing request: requires header `X-Sticker-Bank: 1`.",
+        "operationId" : "saveChore",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "choreId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChoreInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChoreDto"
+                }
+              }
+            },
+            "description" : "Success"
+          },
+          "400" : {
+            "$ref" : "#/components/responses/Problem400"
+          },
+          "401" : {
+            "$ref" : "#/components/responses/Problem401"
+          },
+          "403" : {
+            "$ref" : "#/components/responses/Problem403"
+          },
+          "404" : {
+            "$ref" : "#/components/responses/Problem404"
+          },
+          "409" : {
+            "$ref" : "#/components/responses/Problem409"
+          }
+        },
+        "security" : [ {
+          "parentSession" : [ ]
+        } ],
+        "summary" : "Save a chore's whole definition (edit, or reopen a missed chore)",
+        "tags" : [ "chore" ]
       }
     },
     "/api/parent/library/categories" : {
