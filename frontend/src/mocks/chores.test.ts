@@ -368,6 +368,40 @@ describe('edit', () => {
     expect(saved.state).toBe('IN_PROGRESS')
   })
 
+  it('rejects a task id that is not a task of the chore, with a field error on tasks[i].id', () => {
+    resetFakeApi()
+    const mine = assign()
+    const other = assign({ name: 'Other' })
+    const foreign = other.tasks[0].taskId
+    for (const id of [foreign, 9999]) {
+      try {
+        fake.saveChore(mine.choreId, input({ tasks: [{ id: mine.tasks[0].taskId, label: 'A', iconKey: 'basket' }, { id, label: 'B', iconKey: 'basket' }] }))
+        throw new Error('expected a rejection')
+      } catch (e) {
+        expect(e).toBeInstanceOf(FakeApiError)
+        const err = e as FakeApiError
+        expect(`${err.status} ${err.code}`).toBe('400 VALIDATION_FAILED')
+        expect(err.extras.fieldErrors).toEqual([{ field: 'tasks[1].id', message: 'Not a task of this chore' }])
+      }
+    }
+    expect(fake.listChores({ filter: 'active' }).items.find((c) => c.choreId === mine.choreId)?.tasks).toHaveLength(3)
+  })
+
+  it('rejects a task id on assign', () => {
+    resetFakeApi()
+    const existing = assign()
+    try {
+      assign({ tasks: [{ label: 'A', iconKey: 'basket' }, { id: existing.tasks[0].taskId, label: 'B', iconKey: 'basket' }] }, JOHN)
+      throw new Error('expected a rejection')
+    } catch (e) {
+      expect(e).toBeInstanceOf(FakeApiError)
+      const err = e as FakeApiError
+      expect(`${err.status} ${err.code}`).toBe('400 VALIDATION_FAILED')
+      expect(err.extras.fieldErrors).toEqual([{ field: 'tasks[1].id', message: 'Not a task of this chore' }])
+    }
+    expect(fake.listChores({ filter: 'active', childId: JOHN }).items).toHaveLength(0)
+  })
+
   it('an edit that leaves everything checked is only READY_TO_FINISH', () => {
     resetFakeApi()
     const c = assign()

@@ -82,6 +82,7 @@ private class DemoSeedRun(private val jdbc: JdbcClient, private val clock: Clock
         val john = createChild("John Doe", "dog-face", "#4CC9F0", 2)
         seedChild(jane, designs, isJane = true)
         seedChild(john, designs, isJane = false)
+        seedChores(jane, john, designs)
         log.info("Demo data loaded — demo PIN 1234 (development only)")
     }
 
@@ -219,6 +220,87 @@ private class DemoSeedRun(private val jdbc: JdbcClient, private val clock: Clock
             live.tasks.forEachIndexed { i, task -> complete(childId, live, task, i, today) }
         }
         check(isJane || unclaimedId != null) { "Expected an unclaimed demo sticker" }
+    }
+
+    /**
+     * Chores (TDD 12.5), added after the routine data and without drawing from [random], so the routines above stay
+     * exactly as they were: the first child has two still to do, the second has one finished with a claimed sticker.
+     */
+    private fun seedChores(jane: Long, john: Long, designs: List<Long>) {
+        // three tasks, due today, the first one checked
+        insertChore(
+            jane,
+            "Tidy the playroom",
+            "broom",
+            today,
+            listOf(
+                Triple("Toys in the basket", "basket", true),
+                Triple("Books on the shelf", "open-book", false),
+                Triple("Sweep the floor", "broom", false),
+            ),
+            today.minusDays(1),
+        )
+        // no due date, nothing checked yet
+        insertChore(
+            jane,
+            "Water the plants",
+            "potted-plant",
+            null,
+            listOf(Triple("Fill the watering can", "bucket", false), Triple("Water each plant", "droplet", false)),
+            today,
+        )
+        // finished two days ago, with its sticker claimed and in the Sticker Book
+        val finished =
+            insertChore(
+                john,
+                "Feed the fish",
+                "fish",
+                null,
+                listOf(Triple("Scoop the food", "bowl-with-spoon", true), Triple("Feed the fish", "fish", true)),
+                today.minusDays(3),
+            )
+        val earned = utc(today.minusDays(2), LocalTime.of(16, 0))
+        insert(
+            "INSERT INTO sticker (child_id, source, chore_id, chart_date, routine_name, routine_icon_key, design_id, status, " +
+                "prize_request_id, earned_at, claimed_at, finish_mode) VALUES (?, 'CHORE', ?, ?, ?, ?, ?, 'AVAILABLE', NULL, ?, ?, 'TAPPED')",
+            john, finished, today.minusDays(2), "Feed the fish", "fish", designs[3], earned, earned.plus(Duration.ofMinutes(1)),
+        )
+    }
+
+    private fun insertChore(
+        childId: Long,
+        name: String,
+        icon: String,
+        due: LocalDate?,
+        tasks: List<Triple<String, String, Boolean>>,
+        assignedOn: LocalDate,
+    ): Long {
+        val created = utc(assignedOn, LocalTime.of(9, 0))
+        val choreId =
+            insert(
+                "INSERT INTO chore (child_id, name, icon_key, due_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                childId,
+                name,
+                icon,
+                due,
+                created,
+                created,
+            )
+        tasks.forEachIndexed { index, (label, taskIcon, checked) ->
+            jdbc.sql(
+                "INSERT INTO chore_task (chore_id, position, label, icon_key, checked_at, checked_by) VALUES (?, ?, ?, ?, ?, ?)",
+            ).params(
+                listOf<Any?>(
+                    choreId,
+                    index + 1,
+                    label,
+                    taskIcon,
+                    if (checked) maxOf(utc(today, LocalTime.of(8, 0)), created) else null,
+                    if (checked) "CHILD" else null,
+                ),
+            ).update()
+        }
+        return choreId
     }
 
     private fun insertSticker(

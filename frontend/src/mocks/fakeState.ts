@@ -1928,7 +1928,8 @@ function checkTaskIcon(c: Check, field: string, key: string): void {
   if (!getArtwork(key)?.uses.includes('task')) c.errors.push({ field, message: 'must be a task icon' })
 }
 
-function parseChore(body: unknown, forAssign: boolean): ParsedChore {
+/** `ownTaskIds`: the ids of the chore being edited; on assign it is null and no task may carry an id. */
+function parseChore(body: unknown, forAssign: boolean, ownTaskIds: ReadonlySet<number> | null = null): ParsedChore {
   const o = asObj(body)
   const c = new Check(o)
   const name = c.str('name', 60)
@@ -1961,7 +1962,11 @@ function parseChore(body: unknown, forAssign: boolean): ParsedChore {
       const icon = tc.str('iconKey', 64)
       checkTaskIcon(tc, 'iconKey', icon)
       for (const e of tc.errors) c.errors.push({ field: `tasks[${i}].${e.field}`, message: e.message })
-      tasks.push({ id: typeof t.id === 'number' ? t.id : null, label, iconKey: icon })
+      const id = typeof t.id === 'number' ? t.id : null
+      if (t.id !== undefined && t.id !== null && (id === null || ownTaskIds === null || !ownTaskIds.has(id))) {
+        c.errors.push({ field: `tasks[${i}].id`, message: 'Not a task of this chore' })
+      }
+      tasks.push({ id, label, iconKey: icon })
     })
   }
   c.done()
@@ -1997,7 +2002,7 @@ export function saveChore(choreId: number, body: unknown): Chore {
   const chore = findChore(choreId)
   settleEndedDays(chore.childId)
   if (liveChoreSticker(chore.id)) throw conflict('CHORE_LOCKED', 'This chore is already finished')
-  const p = parseChore(body, false)
+  const p = parseChore(body, false, new Set(chore.tasks.map((t) => t.id)))
   // A past due date is never accepted, so saving a Missed chore always reopens it, and the limit applies (BR-25).
   if (choreState(chore) === 'MISSED') requireRoom(chore.childId)
   const existing = new Map(chore.tasks.map((t) => [t.id, t]))

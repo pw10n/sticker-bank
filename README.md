@@ -39,7 +39,7 @@ UI only, with mocked API (no backend, no database):
 cd frontend && npm install && npm run dev:mock
 ```
 
-Add `?scenario=<name>` to the URL. Scenarios: `fresh-install`, `one-task-left`, `pick-waiting`, `empty-library`, `pending-request`, `offline`. The demo PIN is `1234` in mock and dev modes only.
+Add `?scenario=<name>` to the URL. Scenarios: `fresh-install`, `one-task-left`, `pick-waiting`, `empty-library`, `pending-request`, `chore-waiting`, `chore-ready`, `offline`. The demo PIN is `1234` in mock and dev modes only.
 
 Full stack (backend with a throwaway MySQL via Testcontainers, plus the Vite dev server):
 
@@ -69,6 +69,18 @@ Checking the last task of a routine does not earn the sticker. The routine becom
 ### Taking a sticker back (Parent Mode)
 
 Open History, pick a day (today or past), and tap **Uncheck** on a done task in a finished routine. The "Remove this sticker?" sheet takes an optional note; confirm with **Remove sticker**. The sticker is marked removed (kept in history, struck through in prize history) and taken out of a waiting prize request; a request left with no stickers is cancelled as "Cancelled: stickers removed". The routine reopens, and finishing it again earns a new sticker with the same three choices as before, whether or not the child had already picked one. Spent (Used) stickers can't be removed. Every removal, with its note, is listed in History. Child Mode can never uncheck a finished routine. Designs that were ever earned or offered in a pick, even if the sticker was later removed, can't be deleted from the library, only retired.
+
+### Chores
+
+A chore is a one-off job that sits outside a routine, such as "Clean your room" or "Feed the fish". Like a routine it has tasks, and finishing it earns a sticker, but it belongs to one child on one list instead of to a weekly schedule. A child can have up to five chores to do at a time.
+
+In Parent Mode, tap **Assign a chore** on Home (or on the Chores page). Give it a name and a picture, then add up to six tasks. With no tasks, the chore is one tile with its own name and picture. A due date is optional: choose No due date, Today, Tomorrow or a later day. Recent chores appear as chips that fill in the form. Tick several children to give each of them the same chore. The **Done already** switch is for a job that is finished before you assign it: the sticker is earned at once, and you can let the child pick now or leave it in their "Stickers to pick" tray.
+
+The child sees the chore in a Chores group below the routines, with a Chore tag and, when there is a due date, "Today only" or "By Saturday". A "New chore!" notice with a chime appears the first time the chart shows it, and tapping the notice scrolls to the card. Tasks and **I'm Done!** work as in a routine, and the sticker is picked the same way.
+
+A chore that isn't finished stays on the chart day after day, until it is finished or removed. When its due date has passed, a chore with every task checked is finished automatically, like a routine at the end of the day, and its sticker waits in the tray. A chore with tasks still undone becomes **Missed**: it leaves the chart and waits under Done and missed on the Chores page, where **Reopen** puts it back with no due date. The Chores page lists what is to do (a parent can check tasks and tap I'm Done! there too) and what is done or missed, newest first, and a chore can be edited or removed until it is finished.
+
+To take a chore's sticker back, open the Chores page, find the chore under Done and missed and tap **Uncheck** on a done task. The sheet says what will happen: the chore goes back on the child's chart, with its other tasks still checked and the same three stickers on offer, or, if you tick **Remove this chore too**, the chore is removed as well. A chore whose due date has passed shows as Missed instead. Spent (Used) stickers can't be removed. Chores also appear in History, where the same Uncheck works.
 
 ## Configuration
 

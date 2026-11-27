@@ -20,6 +20,8 @@ class DemoDataSeederIT {
 
     @Autowired lateinit var clock: Clock
 
+    @Autowired lateinit var artwork: com.stickerbank.common.ArtworkCatalog
+
     // The MySQL container (@RestartScope) is shared across cached contexts, so earlier tests may have left rows behind.
     // Start from the freshly migrated state and seed explicitly; the ApplicationRunner is a no-op on a non-empty DB.
     @BeforeEach
@@ -52,6 +54,53 @@ class DemoDataSeederIT {
                 """.trimIndent(),
             ).param(today).query(Int::class.java).single()
         assertThat(ready).isEqualTo(1)
+    }
+
+    @Test
+    fun `demo data has two chores to do and a finished one with a claimed sticker`() {
+        val today = java.time.LocalDate.ofInstant(clock.instant(), java.time.ZoneOffset.UTC)
+        assertThat(count("SELECT COUNT(*) FROM chore")).isEqualTo(3)
+        assertThat(count("SELECT COUNT(*) FROM chore WHERE removed_at IS NOT NULL")).isZero()
+        // the first child: two to do, none finished
+        val first = "(SELECT id FROM child ORDER BY position ASC LIMIT 1)"
+        val second = "(SELECT id FROM child ORDER BY position DESC LIMIT 1)"
+        assertThat(count("SELECT COUNT(*) FROM chore WHERE child_id = $first")).isEqualTo(2)
+        assertThat(count("SELECT COUNT(*) FROM sticker WHERE child_id = $first AND source = 'CHORE'")).isZero()
+
+        val tidy =
+            jdbc.sql("SELECT id, due_date FROM chore WHERE child_id = $first AND name = 'Tidy the playroom'")
+                .query { rs, _ -> rs.getLong("id") to rs.getObject("due_date", java.time.LocalDate::class.java) }.single()
+        assertThat(tidy.second).isEqualTo(today)
+        assertThat(count("SELECT COUNT(*) FROM chore_task WHERE chore_id = ${tidy.first}")).isEqualTo(3)
+        assertThat(count("SELECT COUNT(*) FROM chore_task WHERE chore_id = ${tidy.first} AND checked_at IS NOT NULL")).isEqualTo(1)
+        assertThat(
+            count("SELECT COUNT(*) FROM chore WHERE name = 'Water the plants' AND due_date IS NULL AND child_id = $first"),
+        ).isEqualTo(1)
+        assertThat(
+            count(
+                "SELECT COUNT(*) FROM chore_task t JOIN chore c ON c.id = t.chore_id WHERE c.child_id = $first AND c.name = 'Water the plants' AND t.checked_at IS NULL",
+            ),
+        ).isEqualTo(2)
+
+        // the second child: one finished chore, every task checked, its sticker claimed
+        assertThat(count("SELECT COUNT(*) FROM chore WHERE child_id = $second")).isEqualTo(1)
+        assertThat(
+            count(
+                "SELECT COUNT(*) FROM chore_task t JOIN chore c ON c.id = t.chore_id WHERE c.child_id = $second AND t.checked_at IS NULL",
+            ),
+        ).isZero()
+        assertThat(
+            count(
+                "SELECT COUNT(*) FROM live_sticker s JOIN chore c ON c.id = s.chore_id " +
+                    "WHERE c.child_id = $second AND s.source = 'CHORE' AND s.status = 'AVAILABLE' AND s.design_id IS NOT NULL " +
+                    "AND s.claimed_at IS NOT NULL AND s.routine_name = c.name AND s.routine_id IS NULL",
+            ),
+        ).isEqualTo(1)
+        assertThat(count("SELECT COUNT(*) FROM chore_task WHERE icon_key = ''")).isZero()
+        val icons = jdbc.sql("SELECT icon_key FROM chore UNION SELECT icon_key FROM chore_task").query(String::class.java).list()
+        assertThat(icons).isNotEmpty.allMatch { artwork.exists(requireNotNull(it), com.stickerbank.common.ArtworkUse.TASK) }
+        // the unfinished chores have no sticker and every chore of the demo family is within the limit of 5 per child
+        assertThat(count("SELECT COUNT(*) FROM live_sticker WHERE source = 'CHORE'")).isEqualTo(1)
     }
 
     @Test

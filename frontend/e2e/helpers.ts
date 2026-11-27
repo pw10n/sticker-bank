@@ -56,3 +56,25 @@ export function localDate(daysAgo: number): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
+
+/** Leaves Parent Mode and lands on Jane Doe's chart (picking her if the app shows the child picker). */
+export async function exitParentModeToJane(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Exit Parent Mode' }).click()
+  const parentMode = page.getByRole('button', { name: 'Parent Mode', exact: true })
+  const jane = page.getByRole('button', { name: 'Jane Doe', exact: true })
+  await expect(parentMode.or(jane)).toBeVisible()
+  if (!(await parentMode.isVisible())) await jane.click()
+  await expect(parentMode).toBeVisible()
+}
+
+/** I'm Done! ignores taps for a moment after it appears (600 ms guard), so the tap that checked the last task cannot press it. */
+export async function pressImDone(done: Locator): Promise<void> {
+  await expect(done).toBeVisible()
+  await done.page().waitForTimeout(700)
+  await done.click()
+}
+
+/** The sticker choices on the pick screen (every button except "Not now"). */
+export function pickChoices(page: Page): Locator {
+  return page.getByRole('main').getByRole('button').filter({ hasNotText: 'Not now' })
+}
