@@ -242,6 +242,19 @@ class ChoreRevokeIT : FlowTestBase() {
     }
 
     @Test
+    fun `removeChore sets updated_at together with removed_at`() {
+        choreSticker(StickerStatus.AVAILABLE)
+        jdbc.sql("UPDATE chore SET updated_at = ? WHERE id = ?").params(LocalDateTime.of(2026, 1, 1, 8, 0), chore.choreId).update()
+
+        revoke(removeChore = true)
+
+        val updatedAt = jdbc.sql("SELECT updated_at FROM chore WHERE id = ?").param(chore.choreId)
+            .query { rs, _ -> rs.getObject("updated_at", LocalDateTime::class.java) }.list().single()
+        assertThat(removedAt()).isEqualTo(LocalDateTime.of(2026, 10, 15, 15, 0))
+        assertThat(updatedAt).isEqualTo(removedAt())
+    }
+
+    @Test
     fun `with no live sticker it returns null and changes nothing`() {
         // never finished
         val before = checks()

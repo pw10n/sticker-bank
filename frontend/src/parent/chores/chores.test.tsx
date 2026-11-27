@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -232,6 +232,24 @@ describe('Chores page actions', () => {
     expect(await screen.findByText('Wash the car removed.')).toBeInTheDocument()
   })
 
+  it('keeps the chore listed and says so when removing fails', async () => {
+    const api = mockApi({ active: [chore()] })
+    capture(api, 'delete', '*/api/parent/chores/10', () => problem(500, 'UNKNOWN'))
+    const { user } = setup()
+    await user.click(await screen.findByRole('button', { name: 'Remove Wash the car' }))
+    await user.click(await screen.findByRole('button', { name: 'Remove' }))
+    expect(await screen.findByText('Could not remove that chore. Please try again.')).toBeInTheDocument()
+    expect(screen.getByRole('listitem', { name: 'Wash the car' })).toBeInTheDocument()
+  })
+
+  it('offers no Edit or Remove on a finished chore under Done and missed', async () => {
+    mockApi({ closed: [finished()] })
+    setup('/parent/chores')
+    const card = await screen.findByRole('listitem', { name: 'Tidy the shed' })
+    expect(within(card).queryByRole('button', { name: /^Edit/ })).not.toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: /^Remove/ })).not.toBeInTheDocument()
+  })
+
   it('reopens a missed chore on No due date and sends dueDate null', async () => {
     const api = mockApi({ closed: [chore({ choreId: 30, name: 'Old job', state: 'MISSED', closedOn: '2029-12-25', dueDate: '2029-12-25' })] })
     capture(api, 'put', '*/api/parent/chores/30', () => HttpResponse.json(chore({ choreId: 30 })))
@@ -450,6 +468,63 @@ describe('chore form', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(api.calls.filter((c) => c.method === 'POST')).toHaveLength(3))
     expect(api.calls.filter((c) => c.url === '/1')).toHaveLength(1)
+  })
+
+  it('unticks a child that got the chore when a later child answers a field error, so saving again skips them', async () => {
+    const api = mockApi({}, [JANE, JOHN])
+    server.use(
+      http.post('*/api/parent/children/:childId/chores', async ({ request, params }) => {
+        api.calls.push({ method: 'POST', url: `/${params.childId as string}`, body: await request.json() })
+        return params.childId === '2'
+          ? problem(400, 'VALIDATION_FAILED', { fieldErrors: [{ field: 'name', message: 'Name is already used' }] })
+          : HttpResponse.json(chore())
+      }),
+    )
+    const { user, dialog } = await openForm(api)
+    await user.type(within(dialog).getByLabelText('Chore name'), 'Wash the car')
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Jane Doe' }))
+    await user.click(within(dialog).getByRole('checkbox', { name: 'John Doe' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(await within(dialog).findByText('Name is already used')).toBeInTheDocument()
+    expect(within(dialog).getByRole('checkbox', { name: 'Jane Doe' })).not.toBeChecked()
+    expect(within(dialog).getByRole('checkbox', { name: 'John Doe' })).toBeChecked()
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.calls.filter((c) => c.url === '/2')).toHaveLength(2))
+    expect(api.calls.filter((c) => c.url === '/1')).toHaveLength(1)
+  })
+
+  it('ignores a second click while the first save is still going', async () => {
+    const api = mockApi({}, [JANE, JOHN])
+    server.use(
+      http.post('*/api/parent/children/:childId/chores', async ({ request, params }) => {
+        api.calls.push({ method: 'POST', url: `/${params.childId as string}`, body: await request.json() })
+        await new Promise((r) => setTimeout(r, 30))
+        return HttpResponse.json(chore())
+      }),
+    )
+    const { user, dialog } = await openForm(api)
+    await user.type(within(dialog).getByLabelText('Chore name'), 'Wash the car')
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Jane Doe' }))
+    await user.click(within(dialog).getByRole('checkbox', { name: 'John Doe' }))
+    const save = within(dialog).getByRole('button', { name: 'Save' })
+    act(() => {
+      save.click()
+      save.click()
+    })
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Assign a chore' })).not.toBeInTheDocument())
+    expect(api.calls.filter((c) => c.url === '/1')).toHaveLength(1)
+    expect(api.calls.filter((c) => c.url === '/2')).toHaveLength(1)
+  })
+
+  it('sends today as the dueDate for the Today quick choice', async () => {
+    const api = mockApi({}, [JANE])
+    capture(api, 'post', '*/api/parent/children/:childId/chores', () => HttpResponse.json(chore()))
+    const { user, dialog } = await openForm(api)
+    await user.type(within(dialog).getByLabelText('Chore name'), 'Feed the cat')
+    await user.click(within(dialog).getByRole('button', { name: 'Today' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.calls.some((c) => c.method === 'POST')).toBe(true))
+    expect((api.calls.find((c) => c.method === 'POST')?.body as ChoreInput).dueDate).toBe(TODAY)
   })
 
   it('opens with the filtered child ticked', async () => {

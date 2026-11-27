@@ -45,14 +45,18 @@ export default function DailyChartScreen() {
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
   const [finishingKey, setFinishingKey] = useState<string | null>(null)
   const [celebrating, setCelebratingState] = useState(false)
-  const [toast, setToast] = useState<ToastChore[]>([])
+  // The toast belongs to one child: the screen instance is reused when the child is switched.
+  const [toastState, setToastState] = useState<{ childId: number; chores: ToastChore[] }>({ childId, chores: [] })
+  const toast = useMemo(() => (toastState.childId === childId ? toastState.chores : []), [toastState, childId])
+  const finishingRef = useRef(false)
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
     return () => {
       mounted.current = false
+      guardCelebrating(false)
     }
-  }, [])
+  }, [guardCelebrating])
 
   const setCelebrating = useCallback(
     (active: boolean) => {
@@ -137,20 +141,24 @@ export default function DailyChartScreen() {
   const celebrate = useCallback(
     async (stickerId: number) => {
       setCelebrating(true)
+      let leaving = false
       try {
         play('fanfare')
         await celebrateRoutine()
+        // Leaving for the pick: the flag stays on until this screen unmounts, so nothing is announced on the way out.
+        leaving = true
+        navigate(`/c/${childId}/pick/${stickerId}`)
       } finally {
-        setCelebrating(false)
+        if (!leaving) setCelebrating(false)
       }
-      navigate(`/c/${childId}/pick/${stickerId}`)
     },
     [setCelebrating, play, navigate, childId],
   )
 
   const onFinish = useCallback(
     async (routine: CardItem) => {
-      if (!chart || finishingKey !== null || !('routineId' in routine)) return
+      if (!chart || finishingRef.current || !('routineId' in routine)) return
+      finishingRef.current = true
       setFinishingKey(keyOf('routine', routine.routineId))
       try {
         const result = await finish.mutateAsync({ routineId: routine.routineId, date: chart.date })
@@ -159,15 +167,17 @@ export default function DailyChartScreen() {
         // A new day (the sticker is waiting in the tray) or a task unchecked elsewhere just reloads the chart.
         if (!isApiError(e, 'DAY_CHANGED') && !isApiError(e, 'ROUTINE_NOT_READY')) play('error')
       } finally {
+        finishingRef.current = false
         if (mounted.current) setFinishingKey(null)
       }
     },
-    [chart, finishingKey, finish, play, celebrate],
+    [chart, finish, play, celebrate],
   )
 
   const onFinishChore = useCallback(
     async (chore: CardItem) => {
-      if (!chart || finishingKey !== null || !('choreId' in chore)) return
+      if (!chart || finishingRef.current || !('choreId' in chore)) return
+      finishingRef.current = true
       setFinishingKey(keyOf('chore', chore.choreId))
       try {
         const result = await finishChore.mutateAsync({ choreId: chore.choreId })
@@ -175,28 +185,34 @@ export default function DailyChartScreen() {
       } catch (e) {
         if (!isQuietChoreError(e)) play('error')
       } finally {
+        finishingRef.current = false
         if (mounted.current) setFinishingKey(null)
       }
     },
-    [chart, finishingKey, finishChore, play, celebrate],
+    [chart, finishChore, play, celebrate],
   )
 
   // New chore (FR-13.14): a chart load or a poll that brings an unfinished chore this device has not announced yet.
   const announced = announcedChoreIds(childId)
-  const handled = useRef<Set<number>>(new Set())
+  const handled = useRef<{ childId: number; ids: Set<number> }>({ childId, ids: new Set() })
   useEffect(() => {
     if (!chart || celebrating) return
+    if (handled.current.childId !== childId) handled.current = { childId, ids: new Set() }
+    const seen = handled.current.ids
     const onChart = chart.chores.map((c) => c.choreId)
     const fresh = chart.chores.filter(
-      (c) => UNFINISHED_CHORE.has(c.state) && !announced.includes(c.choreId) && !handled.current.has(c.choreId),
+      (c) => UNFINISHED_CHORE.has(c.state) && !announced.includes(c.choreId) && !seen.has(c.choreId),
     )
     if (fresh.length > 0) {
-      fresh.forEach((c) => handled.current.add(c.choreId))
+      fresh.forEach((c) => seen.add(c.choreId))
       play('chime')
-      setToast((prev) => [
-        ...prev.filter((p) => !fresh.some((f) => f.choreId === p.choreId)),
-        ...fresh.map((c) => ({ choreId: c.choreId, name: c.name, iconKey: c.iconKey })),
-      ])
+      setToastState((prev) => ({
+        childId,
+        chores: [
+          ...(prev.childId === childId ? prev.chores : []).filter((p) => !fresh.some((f) => f.choreId === p.choreId)),
+          ...fresh.map((c) => ({ choreId: c.choreId, name: c.name, iconKey: c.iconKey })),
+        ],
+      }))
       markChoresAnnounced(childId, fresh.map((c) => c.choreId), onChart)
     } else if (announced.some((id) => !onChart.includes(id))) {
       markChoresAnnounced(childId, [], onChart)
@@ -205,14 +221,14 @@ export default function DailyChartScreen() {
 
   useEffect(() => {
     if (toast.length === 0) return
-    const timer = setTimeout(() => setToast([]), TOAST_MS)
+    const timer = setTimeout(() => setToastState({ childId, chores: [] }), TOAST_MS)
     return () => clearTimeout(timer)
-  }, [toast])
+  }, [toast, childId])
 
   const choreEls = useRef(new Map<number, HTMLElement>())
   const onToastPress = () => {
     const first = toast[0]
-    setToast([])
+    setToastState({ childId, chores: [] })
     const el = first ? choreEls.current.get(first.choreId) : undefined
     if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }

@@ -53,6 +53,12 @@ describe('announced chores', () => {
     expect(JSON.parse(storage.m.get('sb.announcedChores') ?? '{}')).toEqual({ '1': [10, 11, 12], '2': [20] })
   })
 
+  it('returns the same array instance when nothing is stored', () => {
+    const { result } = renderHook(() => useDeviceSettings(), { wrapper })
+    expect(result.current.announcedChoreIds(5)).toBe(result.current.announcedChoreIds(5))
+    expect(result.current.announcedChoreIds(5)).toBe(result.current.announcedChoreIds(6))
+  })
+
   it('drops stored ids that are not on the chart', () => {
     const { result } = renderHook(() => useDeviceSettings(), { wrapper })
     act(() => result.current.markChoresAnnounced(1, [10, 11], [10, 11]))

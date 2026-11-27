@@ -200,7 +200,8 @@ describe('chore parent mutations', () => {
     expect(isInvalidated(qc, keys[0])).toBe(true)
     expect(isInvalidated(qc, keys[1])).toBe(true)
     expect(isInvalidated(qc, keys[2])).toBe(false)
-    expect(isInvalidated(qc, keys[3])).toBe(false)
+    // FX-P: history's day detail shows chores, so an assign invalidates it too (this used to be false).
+    expect(isInvalidated(qc, keys[3])).toBe(true)
   })
 
   it('useAssignChore with alreadyDone also invalidates the book and history', async () => {
@@ -252,6 +253,42 @@ describe('chore parent mutations', () => {
     expect(id).toBe('3')
     expect(isInvalidated(qc, keys[0])).toBe(true)
     expect(isInvalidated(qc, keys[1])).toBe(true)
+  })
+
+  it('assign, save and remove each invalidate history, the parent lists and the chart (not the book)', async () => {
+    server.use(
+      http.post('*/api/parent/children/:childId/chores', () => HttpResponse.json(domainChore(), { status: 201 })),
+      http.put('*/api/parent/chores/:choreId', () => HttpResponse.json(domainChore({ choreId: 7 }))),
+      http.delete('*/api/parent/chores/:choreId', () => new HttpResponse(null, { status: 204 })),
+    )
+    const runs = [
+      async () => {
+        const { qc, wrapper } = makeClient()
+        const { result: r } = renderHook(() => useAssignChore(), { wrapper })
+        return { qc, run: () => r.current.mutateAsync({ childId: 5, input }) }
+      },
+      async () => {
+        const { qc, wrapper } = makeClient()
+        const { result: r } = renderHook(() => useSaveChore(), { wrapper })
+        return { qc, run: () => r.current.mutateAsync({ choreId: 7, childId: 5, input }) }
+      },
+      async () => {
+        const { qc, wrapper } = makeClient()
+        const { result: r } = renderHook(() => useRemoveChore(), { wrapper })
+        return { qc, run: () => r.current.mutateAsync({ choreId: 3, childId: 5 }) }
+      },
+    ]
+    for (const make of runs) {
+      const { qc, run } = await make()
+      const keys = seed(qc)
+      await act(async () => {
+        await run()
+      })
+      expect(isInvalidated(qc, keys[0])).toBe(true)
+      expect(isInvalidated(qc, keys[1])).toBe(true)
+      expect(isInvalidated(qc, keys[2])).toBe(false)
+      expect(isInvalidated(qc, keys[3])).toBe(true)
+    }
   })
 })
 
@@ -359,7 +396,27 @@ describe('useToggleChoreTask', () => {
     })
     expect(choreTasksDone(qc)).toEqual([false, false])
     expect(isInvalidated(qc, CHART_KEY)).toBe(false)
+    expect(isInvalidated(qc, qk.parent.chores({ filter: 'active' }))).toBe(false)
   })
+
+  for (const [status, code] of [
+    [409, 'CHORE_MISSED'],
+    [404, 'NOT_FOUND'],
+  ] as const) {
+    it(`invalidates the parent chore lists as well as the chart on ${code} (${status})`, async () => {
+      const { qc, r } = setup()
+      qc.setQueryData(qk.parent.chores({ filter: 'active' }), {})
+      server.use(
+        http.put(TASK_URL, () => HttpResponse.json({ status, code }, { status })),
+        http.get('*/api/children/:childId/days/:date', () => HttpResponse.json(chart([chore(false, false)]))),
+      )
+      await act(async () => {
+        await r.current.mutateAsync({ choreId: 1, taskId: 10, done: true }).catch(() => undefined)
+      })
+      expect(isInvalidated(qc, qk.parent.chores({ filter: 'active' }))).toBe(true)
+      expect(isInvalidated(qc, CHART_KEY)).toBe(true)
+    })
+  }
 
   it('keeps both toggles on different tasks when the earlier response arrives last', async () => {
     const { qc, r } = setup()
@@ -520,6 +577,38 @@ describe('useFinishChore', () => {
       expect(isInvalidated(qc, CHART_KEY)).toBe(true)
     })
   }
+
+  for (const [status, code] of [
+    [409, 'CHORE_MISSED'],
+    [404, 'NOT_FOUND'],
+  ] as const) {
+    it(`invalidates the parent chore lists as well as the chart on ${code} (${status})`, async () => {
+      const { qc, r } = setup()
+      qc.setQueryData(qk.parent.chores({ filter: 'active' }), {})
+      server.use(
+        http.post('*/api/children/:childId/chores/:choreId/finish', () =>
+          HttpResponse.json({ status, code }, { status }),
+        ),
+        http.get('*/api/children/:childId/days/:date', () => HttpResponse.json(chart([chore(true, false)]))),
+      )
+      await act(async () => {
+        await r.current.mutateAsync({ choreId: 1 }).catch(() => undefined)
+      })
+      expect(isInvalidated(qc, qk.parent.chores({ filter: 'active' }))).toBe(true)
+      expect(isInvalidated(qc, CHART_KEY)).toBe(true)
+    })
+  }
+
+  it('invalidates nothing on a NETWORK error', async () => {
+    const { qc, r } = setup()
+    qc.setQueryData(qk.parent.chores({ filter: 'active' }), {})
+    server.use(http.post('*/api/children/:childId/chores/:choreId/finish', () => HttpResponse.error()))
+    await act(async () => {
+      await r.current.mutateAsync({ choreId: 1 }).catch(() => undefined)
+    })
+    expect(isInvalidated(qc, CHART_KEY)).toBe(false)
+    expect(isInvalidated(qc, qk.parent.chores({ filter: 'active' }))).toBe(false)
+  })
 
   it('does not touch the chart on an unrelated error', async () => {
     const { qc, r } = setup()

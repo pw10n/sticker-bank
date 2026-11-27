@@ -56,6 +56,9 @@ function readAnnounced(): Record<string, number[]> {
   }
 }
 
+/** One shared value for "nothing stored", so callers that depend on the list do not see a new array every render. */
+const NO_IDS: number[] = []
+
 export function DeviceSettingsProvider({ children }: { children: ReactNode }) {
   const [lastChildId, setLast] = useState<number | null>(readLastChild)
   const [soundsOn, setSounds] = useState<boolean>(readSoundsOn)
@@ -70,7 +73,7 @@ export function DeviceSettingsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const [announced, setAnnounced] = useState<Record<string, number[]>>(readAnnounced)
-  const announcedChoreIds = useCallback((childId: number) => announced[String(childId)] ?? [], [announced])
+  const announcedChoreIds = useCallback((childId: number) => announced[String(childId)] ?? NO_IDS, [announced])
   const markChoresAnnounced = useCallback((childId: number, ids: number[], onChart: number[]) => {
     const current = readAnnounced()
     const key = String(childId)

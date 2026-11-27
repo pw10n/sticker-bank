@@ -112,6 +112,20 @@ class ChoreChartIT {
     }
 
     @Test
+    fun `old missed chores stay off today and show only on the day they were missed`() {
+        val d1 = today.minusDays(40)
+        val d2 = today.minusDays(30)
+        fixtures.createChore(childId, name = "Missed A", dueDate = d1, checked = setOf(0), createdAt = at(9))
+        fixtures.createChore(childId, name = "Missed B", dueDate = d2, createdAt = at(10))
+        fixtures.createChore(childId, name = "Missed C", dueDate = d2, checked = setOf(0), createdAt = at(11))
+        fixtures.createChore(childId, name = "Open", createdAt = at(12))
+        assertThat(names("$.chores[*].name")).containsExactly("Open")
+        assertThat(names("$.chores[*].name", d1.toString())).containsExactly("Missed A")
+        assertThat(names("$.chores[*].name", d2.toString())).containsExactly("Missed B", "Missed C")
+        assertThat(names("$.chores[*].name", today.minusDays(35).toString())).isEmpty()
+    }
+
+    @Test
     fun `removed chores and other children's chores are not shown`() {
         fixtures.createChore(childId, name = "Gone", removed = true)
         val other = fixtures.createChild("John Doe")

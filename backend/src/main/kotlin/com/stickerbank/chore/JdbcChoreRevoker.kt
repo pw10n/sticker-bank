@@ -6,6 +6,7 @@ import com.stickerbank.common.ErrorCode
 import com.stickerbank.common.FamilyClock
 import com.stickerbank.common.StickerStatus
 import com.stickerbank.revocation.RevocationService
+import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Component
 import java.time.LocalDateTime
@@ -20,6 +21,8 @@ import java.time.ZoneOffset
 @Component
 class JdbcChoreRevoker(private val jdbc: JdbcClient, private val revocations: RevocationService, private val clock: FamilyClock) :
     ChoreRevoker {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     private data class LiveSticker(val id: Long, val status: StickerStatus)
 
     override fun revokeLocked(childId: Long, choreId: Long, taskId: Long, note: String?, removeChore: Boolean): RevokedStickerDto? {
@@ -41,7 +44,9 @@ class JdbcChoreRevoker(private val jdbc: JdbcClient, private val revocations: Re
         val revoked = revocations.revokeStickerLocked(childId, sticker.id, null, label, note)
         if (removeChore) {
             val now = LocalDateTime.ofInstant(clock.now(), ZoneOffset.UTC)
-            jdbc.sql("UPDATE chore SET removed_at = ? WHERE id = ? AND removed_at IS NULL").params(now, choreId).update()
+            jdbc.sql("UPDATE chore SET removed_at = ?, updated_at = ? WHERE id = ? AND removed_at IS NULL")
+                .params(now, now, choreId).update()
+            log.info("chore removed childId={} choreId={}", childId, choreId)
         }
         return revoked
     }

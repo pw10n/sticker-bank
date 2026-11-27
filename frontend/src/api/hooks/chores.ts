@@ -53,6 +53,8 @@ export function useRecentChores() {
 function invalidateParentChores(qc: QueryClient, childId: number) {
   void qc.invalidateQueries({ queryKey: ['parent', 'chores'] })
   void qc.invalidateQueries({ queryKey: ['chart', childId] })
+  // History's day detail lists today's chores to do and Missed chores on their due date.
+  void qc.invalidateQueries({ queryKey: ['parent', 'history', childId] })
 }
 
 export function useAssignChore() {
@@ -62,10 +64,7 @@ export function useAssignChore() {
       unwrap<Chore>(api.POST('/api/parent/children/{childId}/chores', { params: { path: { childId } }, body: input })),
     onSuccess: (_chore, { childId, input }) => {
       invalidateParentChores(qc, childId)
-      if (input.alreadyDone) {
-        void qc.invalidateQueries({ queryKey: ['book', childId] })
-        void qc.invalidateQueries({ queryKey: ['parent', 'history', childId] })
-      }
+      if (input.alreadyDone) void qc.invalidateQueries({ queryKey: ['book', childId] })
     },
   })
 }
@@ -161,6 +160,8 @@ export function useToggleChoreTask(childId: number, chartKeyDate: string) {
     onSettled: (_data, error) => {
       // A dead network cannot reconcile anything; the app refetches on reconnect.
       if (isApiError(error, 'NETWORK')) return
+      // A failure may mean the chore changed or went away, so the parent lists must drop or update the card too.
+      if (error) void qc.invalidateQueries({ queryKey: ['parent', 'chores'] })
       if (isLastInFlight()) void qc.invalidateQueries({ queryKey: key })
     },
   })
@@ -187,6 +188,7 @@ export function useFinishChore(childId: number, chartKeyDate: string) {
       const quiet: string[] = ['CHORE_NOT_READY', 'CHORE_MISSED', 'CHORE_LOCKED']
       if (quiet.includes(error.code) || error.status === 404) {
         void qc.invalidateQueries({ queryKey: key })
+        void qc.invalidateQueries({ queryKey: ['parent', 'chores'] })
       }
     },
   })

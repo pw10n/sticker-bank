@@ -1,8 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router'
+import { server } from '../../mocks/server'
 import { getFakeState, resetFakeApi, setFakeParentSession, type ScenarioName } from '../../mocks/fakeApi'
 import RoutineEditorScreen from './RoutineEditorScreen'
 import RoutineListScreen from './RoutineListScreen'
@@ -154,6 +156,22 @@ describe('RoutineEditorScreen', () => {
     expect(after.tasks.map((t) => t.id)).toEqual(before)
     expect(after.tasks[0].label).toBe('Renamed task')
     expect(await screen.findByText('Changes start tomorrow')).toBeInTheDocument()
+  })
+
+  it('shows a server field error on a task row', async () => {
+    server.use(
+      http.put('*/api/parent/routines/:routineId', () =>
+        HttpResponse.json(
+          { status: 400, code: 'VALIDATION_FAILED', title: 'VALIDATION_FAILED', fieldErrors: [{ field: 'tasks[1].label', message: 'That task name is not allowed' }] },
+          { status: 400, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+    setup('/parent/routines/1')
+    await screen.findByLabelText('Task 2')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('That task name is not allowed')).toBeInTheDocument()
   })
 
   it('shows a blank-name error and does not save', async () => {

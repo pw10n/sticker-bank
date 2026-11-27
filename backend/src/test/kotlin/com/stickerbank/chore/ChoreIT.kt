@@ -346,6 +346,19 @@ class ChoreIT {
             .andExpect(jsonPath("$.revoked").doesNotExist())
     }
 
+    private fun one(sql: String, id: Long): Long = jdbc.sql(sql).param(id).query(Long::class.java).single()
+
+    @Test
+    fun `revoke with both flags and no parent session is locked and changes nothing`() {
+        val f = fullChore()
+        val id = earned(f)
+        api.undo(childId, f.choreId, f.taskIds[0], query = "?revokeSticker=true&removeChore=true").andExpect(status().isConflict)
+            .andExpect(jsonPath("$.code").value("CHORE_LOCKED"))
+        assertThat(one("SELECT COUNT(*) FROM live_sticker WHERE id = ?", id)).isEqualTo(1)
+        assertThat(one("SELECT COUNT(*) FROM chore WHERE id = ? AND removed_at IS NULL", f.choreId)).isEqualTo(1)
+        assertThat(one("SELECT COUNT(*) FROM chore_task WHERE chore_id = ? AND checked_at IS NOT NULL", f.choreId)).isEqualTo(2)
+    }
+
     @Test
     fun `revoke with removeChore answers no chore, and removeChore alone is ignored`() {
         val plain = fixtures.createChore(childId, name = "Plain", checked = setOf(0, 1))

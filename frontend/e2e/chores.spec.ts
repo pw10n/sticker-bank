@@ -81,6 +81,10 @@ test('assign a chore with three tasks, the child finishes it and the Sticker Boo
   const toast = page.getByTestId('new-chore-toast')
   await expect(toast).toContainText('New chore!')
   await expect(toast).toContainText('Do the laundry')
+  // Make the card start outside the viewport when the page is long enough for that, so the tap has something to do.
+  await page.evaluate(() => window.scrollTo(0, 0))
+  const scrollable = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight * 2)
+  if (scrollable) await expect(card).not.toBeInViewport()
   await toast.click()
   await expect(toast).toHaveCount(0)
   await expect(card).toBeInViewport()

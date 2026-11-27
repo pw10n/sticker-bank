@@ -309,33 +309,169 @@ describe('new chore toast', () => {
     vi.restoreAllMocks()
   })
 
-  it('stays quiet during a celebration and shows afterwards', async () => {
-    let release: () => void = () => {}
-    vi.mocked(celebrateRoutine).mockImplementationOnce(() => new Promise<void>((res) => (release = res)))
-    load([mkChore({ choreId: 1, state: 'READY_TO_FINISH', doneCount: 1, tasks: [{ taskId: 100, label: 'Task 1', iconKey: 'broom', done: true }] })])
+  it('announces a chore that arrives in a later response, without remounting the screen', async () => {
+    load([mkChore({ choreId: 1 })])
     localStorage.setItem('sb.announcedChores', JSON.stringify({ '1': [1] }))
-    server.use(
-      http.post('*/api/children/:c/chores/:id/finish', () => {
-        // a new chore appears in the same poll as the finish
-        chart = { ...chart, chores: [...chart.chores, mkChore({ choreId: 2, name: 'Water plants' })] }
-        return HttpResponse.json({
-          chore: mkChore({ choreId: 1, state: 'AWAITING_PICK', doneCount: 1 }),
-          pick: { stickerId: 55, childId: 1, chartDate: today(), choices: [], claimed: null, routineName: 'Chore 1', status: 'UNCLAIMED', autoAwarded: false },
-          revoked: null,
-        })
-      }),
-    )
     const { client } = setup()
-    const card = await screen.findByRole('region', { name: 'Chore 1' })
-    const done = await within(card).findByRole('button', { name: /I'm Done!/ })
-    await new Promise((r) => setTimeout(r, 700))
-    await userEvent.click(done)
-    await waitFor(() => expect(celebrateRoutine).toHaveBeenCalled())
+    const group = await screen.findByTestId('chores-group')
+    expect(screen.queryByTestId('new-chore-toast')).not.toBeInTheDocument()
+    chart = { ...chart, chores: [...chart.chores, mkChore({ choreId: 2, name: 'Water plants' })] }
     await act(async () => {
       await client.invalidateQueries()
     })
-    expect(screen.queryByTestId('new-chore-toast')).not.toBeInTheDocument()
-    expect(play).not.toHaveBeenCalledWith('chime')
-    await act(async () => release())
+    expect(await within(screen.getByTestId('chores-group')).findByRole('region', { name: 'Water plants' })).toBeInTheDocument()
+    expect(screen.getByTestId('chores-group')).toBe(group)
+    expect(await screen.findByTestId('new-chore-toast')).toHaveTextContent('Water plants')
+    expect(play.mock.calls.filter((c) => c[0] === 'chime')).toHaveLength(1)
+  })
+
+  it('lives in a polite status region and is a real button with a name', async () => {
+    load([mkChore({ choreId: 1, name: 'Feed the dog' })])
+    setup()
+    const toast = await screen.findByRole('button', { name: /^New chore!\s*Feed the dog$/ })
+    expect(toast.tagName).toBe('BUTTON')
+    const region = toast.closest('[role="status"]')
+    expect(region).not.toBeNull()
+    expect(region).toHaveAttribute('aria-live', 'polite')
+    // Starts below the offline banner (about 2.5rem tall plus the inset), which is fixed at the top.
+    expect(region).toHaveClass('top-[calc(3.25rem+env(safe-area-inset-top))]')
+  })
+
+  it('caps the width and truncates a long name after two lines', async () => {
+    load([mkChore({ choreId: 1, name: 'W'.repeat(60) })])
+    setup()
+    const toast = await screen.findByTestId('new-chore-toast')
+    expect(toast).toHaveClass('max-w-[min(100%,26rem)]', 'min-h-[72px]')
+    expect(within(toast).getByText('W'.repeat(60))).toHaveClass('line-clamp-2')
+  })
+
+  describe('a chore that arrives during a celebration', () => {
+    async function startFinish(release: { fn: (rejectIt?: boolean) => void }) {
+      vi.mocked(celebrateRoutine).mockImplementationOnce(
+        () => new Promise<void>((res, rej) => (release.fn = (rejectIt) => (rejectIt ? rej(new Error('x')) : res()))),
+      )
+      load([mkChore({ choreId: 1, state: 'READY_TO_FINISH', doneCount: 1, tasks: [{ taskId: 100, label: 'Task 1', iconKey: 'broom', done: true }] })])
+      localStorage.setItem('sb.announcedChores', JSON.stringify({ '1': [1] }))
+      server.use(
+        http.post('*/api/children/:c/chores/:id/finish', () => {
+          // a new chore appears in the same poll as the finish
+          chart = { ...chart, chores: [...chart.chores, mkChore({ choreId: 2, name: 'Water plants' })] }
+          return HttpResponse.json({
+            chore: mkChore({ choreId: 1, state: 'AWAITING_PICK', doneCount: 1 }),
+            pick: { stickerId: 55, childId: 1, chartDate: today(), choices: [], claimed: null, routineName: 'Chore 1', status: 'UNCLAIMED', autoAwarded: false },
+            revoked: null,
+          })
+        }),
+      )
+      const { client, router } = setup()
+      const card = await screen.findByRole('region', { name: 'Chore 1' })
+      const done = await within(card).findByRole('button', { name: /I'm Done!/ })
+      await new Promise((r) => setTimeout(r, 700))
+      await userEvent.click(done)
+      await waitFor(() => expect(celebrateRoutine).toHaveBeenCalled())
+      await act(async () => {
+        await client.invalidateQueries()
+      })
+      expect(screen.queryByTestId('new-chore-toast')).not.toBeInTheDocument()
+      expect(play).not.toHaveBeenCalledWith('chime')
+      return router
+    }
+
+    it('is announced afterwards when the celebration ends without leaving', async () => {
+      const release = { fn: (rejectIt?: boolean) => { void rejectIt } }
+      const router = await startFinish(release)
+      await act(async () => release.fn(true))
+      expect(await screen.findByTestId('new-chore-toast')).toHaveTextContent('Water plants')
+      expect(play.mock.calls.filter((c) => c[0] === 'chime')).toHaveLength(1)
+      expect(router.state.location.pathname).toBe('/c/1')
+    })
+
+    it('is not announced, nor marked, when the finish leads to the pick', async () => {
+      const release = { fn: (rejectIt?: boolean) => { void rejectIt } }
+      const router = await startFinish(release)
+      await act(async () => release.fn())
+      await waitFor(() => expect(router.state.location.pathname).toBe('/c/1/pick/55'))
+      expect(play).not.toHaveBeenCalledWith('chime')
+      expect(JSON.parse(localStorage.getItem('sb.announcedChores') ?? '{}')['1'] ?? []).not.toContain(2)
+    })
+  })
+
+  it("drops one child's toast on a switch and announces a new chore of the other child", async () => {
+    resetFakeApi('default')
+    setFakeToday(null)
+    const base = getDailyChart(1, today())
+    server.use(
+      http.get('*/api/children/:childId/days/today', ({ params }) =>
+        HttpResponse.json({
+          ...base,
+          chores: [params.childId === '1' ? mkChore({ choreId: 1, name: 'Feed the dog' }) : mkChore({ choreId: 2, name: 'Water plants' })],
+        }),
+      ),
+    )
+    const { router } = setup()
+    expect(await screen.findByTestId('new-chore-toast')).toHaveTextContent('Feed the dog')
+    await act(async () => {
+      await router.navigate('/c/2')
+    })
+    await waitFor(() => expect(screen.getByTestId('new-chore-toast')).toHaveTextContent('Water plants'))
+    expect(screen.queryByText('Feed the dog')).not.toBeInTheDocument()
+    expect(play.mock.calls.filter((c) => c[0] === 'chime')).toHaveLength(2)
+  })
+
+  describe('two taps in the same frame', () => {
+    const finishBody = (pickId: number) => ({
+      pick: { stickerId: pickId, childId: 1, chartDate: today(), choices: [], claimed: null, routineName: 'X', status: 'UNCLAIMED', autoAwarded: false },
+      revoked: null,
+    })
+
+    it('send one chore finish and navigate once', async () => {
+      load([mkChore({ choreId: 1, state: 'READY_TO_FINISH', doneCount: 1, tasks: [{ taskId: 100, label: 'Task 1', iconKey: 'broom', done: true }] })])
+      let n = 0
+      server.use(
+        http.post('*/api/children/:c/chores/:id/finish', async () => {
+          n++
+          await new Promise((r) => setTimeout(r, 50))
+          return HttpResponse.json({ chore: mkChore({ choreId: 1, state: 'AWAITING_PICK', doneCount: 1 }), ...finishBody(55) })
+        }),
+      )
+      const { router } = setup()
+      const card = await screen.findByRole('region', { name: 'Chore 1' })
+      const done = await within(card).findByRole('button', { name: /I'm Done!/ })
+      await new Promise((r) => setTimeout(r, 700))
+      done.click()
+      done.click()
+      await waitFor(() => expect(router.state.location.pathname).toBe('/c/1/pick/55'))
+      expect(n).toBe(1)
+      expect(celebrateRoutine).toHaveBeenCalledTimes(1)
+      expect(play.mock.calls.filter((c) => c[0] === 'fanfare')).toHaveLength(1)
+    })
+
+    it('send one routine finish and navigate once', async () => {
+      load([])
+      const r = chart.routines.find((x) => x.state !== 'SKIPPED')!
+      chart = {
+        ...chart,
+        routines: chart.routines.map((x) =>
+          x.routineId === r.routineId ? { ...x, state: 'READY_TO_FINISH', doneCount: x.taskCount, tasks: x.tasks.map((t) => ({ ...t, done: true })) } : x,
+        ),
+      }
+      let n = 0
+      server.use(
+        http.post('*/api/children/:c/days/:d/routines/:id/finish', async () => {
+          n++
+          await new Promise((res) => setTimeout(res, 50))
+          return HttpResponse.json({ routine: r, ...finishBody(56) })
+        }),
+      )
+      const { router } = setup()
+      const card = await screen.findByRole('region', { name: r.name })
+      const done = await within(card).findByRole('button', { name: /I'm Done!/ })
+      await new Promise((res) => setTimeout(res, 700))
+      done.click()
+      done.click()
+      await waitFor(() => expect(router.state.location.pathname).toBe('/c/1/pick/56'))
+      expect(n).toBe(1)
+      expect(celebrateRoutine).toHaveBeenCalledTimes(1)
+    })
   })
 })

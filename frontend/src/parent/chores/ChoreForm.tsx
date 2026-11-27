@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { isApiError } from '../../api/errors'
@@ -113,6 +113,9 @@ function ChoreFormBody({
   const childName = (id: number) => children.find((c) => c.id === id)?.name ?? 'This child'
 
   const [pickerOpen, setPickerOpen] = useState(false)
+  // Set synchronously when a submit starts and cleared when the whole submit ends, so a fast second click is ignored.
+  const submittingRef = useRef(false)
+  const [submitting, setSubmitting] = useState(false)
   const [generalError, setGeneralError] = useState<string | null>(null)
   const [failures, setFailures] = useState<string[]>([])
   const [assignedNote, setAssignedNote] = useState<string | null>(null)
@@ -204,6 +207,18 @@ function ChoreFormBody({
   }
 
   const onSubmit = async (values: FormValues) => {
+    if (submittingRef.current) return
+    submittingRef.current = true
+    setSubmitting(true)
+    try {
+      await submit(values)
+    } finally {
+      submittingRef.current = false
+      setSubmitting(false)
+    }
+  }
+
+  const submit = async (values: FormValues) => {
     setGeneralError(null)
     setFailures([])
     setAssignedNote(null)
@@ -249,18 +264,22 @@ function ChoreFormBody({
     const ok: number[] = []
     const lines: string[] = []
     let last: Chore | null = null
+    let blocked = false
     for (const id of targets) {
       try {
         last = await assign.mutateAsync({ childId: id, input })
         ok.push(id)
       } catch (e) {
         // The same input fails the same way for every child, so stop at the first validation problem.
-        if (isApiError(e, 'VALIDATION_FAILED') && applyFieldErrors(e)) return
+        if (isApiError(e, 'VALIDATION_FAILED') && applyFieldErrors(e)) {
+          blocked = true
+          break
+        }
         const msg = messageFor(e, childName(id))
         lines.push(isApiError(e, 'CHORE_LIMIT_REACHED') || targets.length === 1 ? msg : `${childName(id)}: ${msg}`)
       }
     }
-    if (lines.length === 0) {
+    if (lines.length === 0 && !blocked) {
       const names = ok.map(childName).join(', ')
       onSaved?.(`Assigned ${name} to ${names}.`)
       const sticker = last?.sticker ?? null
@@ -277,17 +296,19 @@ function ChoreFormBody({
       onClose()
       return
     }
-    // Untick the children that got the chore, so saving again cannot give them a second one.
-    setValue(
-      'childIds',
-      targets.filter((id) => !ok.includes(id)),
-    )
+    // The form stays open: untick the children that got the chore, so saving again cannot give them a second one.
+    if (ok.length > 0 || lines.length > 0) {
+      setValue(
+        'childIds',
+        targets.filter((id) => !ok.includes(id)),
+      )
+    }
     if (ok.length > 0) setAssignedNote(`Assigned to ${ok.map(childName).join(', ')}.`)
     setFailures(lines)
     if (ok.length > 0) onSaved?.(`Assigned ${name} to ${ok.map(childName).join(', ')}.`)
   }
 
-  const saving = assign.isPending || save.isPending
+  const saving = submitting
 
   if (offer) {
     return (

@@ -144,11 +144,16 @@ class ChoreQueries(private val jdbc: JdbcClient) {
         val heads = jdbc.sql(
             "SELECT c.id, c.child_id, c.name, c.icon_key, c.due_date, c.created_at, c.removed_at FROM chore c " +
                 "WHERE c.child_id = :child AND c.removed_at IS NULL AND (" +
-                "EXISTS (SELECT 1 FROM live_sticker s WHERE s.chore_id = c.id AND s.chart_date BETWEEN :from AND :to) " +
-                "OR c.due_date BETWEEN :from AND :to " +
-                "OR (:todayIn AND NOT EXISTS (SELECT 1 FROM live_sticker s WHERE s.chore_id = c.id))) " +
+                // Finished: starts from the stickers dated in the range.
+                "c.id IN (SELECT s.chore_id FROM live_sticker s WHERE s.child_id = :child AND s.chart_date BETWEEN :from AND :to) " +
+                // Missed on a day in the range.
+                "OR (c.due_date < :today AND c.due_date BETWEEN :from AND :to " +
+                "AND NOT EXISTS (SELECT 1 FROM live_sticker s WHERE s.chore_id = c.id)) " +
+                // Unfinished, listed on today only.
+                "OR (:todayIn AND (c.due_date IS NULL OR c.due_date >= :today) " +
+                "AND NOT EXISTS (SELECT 1 FROM live_sticker s WHERE s.chore_id = c.id))) " +
                 "ORDER BY c.created_at, c.id",
-        ).param("child", childId).param("from", from).param("to", to).param("todayIn", todayIn)
+        ).param("child", childId).param("from", from).param("to", to).param("today", today).param("todayIn", todayIn)
             .query { rs, _ -> head(rs) }.list()
         return assemble(heads)
     }

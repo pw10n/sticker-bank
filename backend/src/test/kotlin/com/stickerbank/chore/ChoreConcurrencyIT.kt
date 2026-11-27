@@ -144,6 +144,22 @@ class ChoreConcurrencyIT : FlowTestBase() {
         assertThat(count("SELECT COUNT(*) FROM chore_task WHERE chore_id = ? AND checked_at IS NULL", chore.choreId)).isZero()
     }
 
+    @org.junit.jupiter.api.Test
+    fun `a finish after the due date returns the pick of the automatic sticker`() {
+        val chore = fullChore(due = today)
+        api.chart(childId).andReturn()
+        clock.set(Instant.parse("2026-10-16T00:00:30Z"))
+
+        val response = api.finish(childId, chore.choreId).andReturn().response
+
+        assertThat(response.status).isEqualTo(200)
+        val auto = jdbc.sql("SELECT id FROM sticker WHERE chore_id = ? AND finish_mode = 'AUTO'").param(chore.choreId)
+            .query(Long::class.java).single()
+        assertThat(long(response.contentAsString, "$.pick.stickerId")).isEqualTo(auto)
+        assertThat(choices(response.contentAsString)).hasSize(3)
+        assertThat(count("SELECT COUNT(*) FROM sticker_pick_choice WHERE sticker_id = ?", auto)).isEqualTo(3)
+    }
+
     @RepeatedTest(5)
     fun `a finish racing the first request after the due date gives exactly one sticker`() {
         val chore = fullChore(due = today)
